@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   if (!canAccessConnection(session, connectionId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const issued = issueApiKey({
+  const issued = await issueApiKey({
     connectionId,
     groupUuid: text("groupUuid"),
     groupName: text("groupName"),

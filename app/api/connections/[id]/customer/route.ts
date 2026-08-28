@@ -15,7 +15,7 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const connection = getConnection(id);
+  const connection = await getConnection(id);
   if (!connection) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

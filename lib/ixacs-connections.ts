@@ -8,6 +8,7 @@ import {
   parseLineUuids,
 } from "@/lib/ixacs-curl";
 import { normalizeLoginUrl, type IxacsCustomerOption } from "@/lib/ixacs-login";
+import { getSupabaseAdmin, supabaseConfigured } from "@/lib/supabase-admin";
 
 export type IxacsConnection = {
   id: string;
@@ -32,24 +33,98 @@ type PersistedConnections = {
   connections: Record<string, IxacsConnection>;
 };
 
+type DbRow = {
+  id: string;
+  name: string;
+  base_url: string;
+  login_url: string;
+  customer_id: string;
+  customers: unknown;
+  login_id: string;
+  password: string;
+  basic_auth: string;
+  session: string;
+  line_uuids: string[] | null;
+  is_active: boolean;
+  last_ok_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const STATE_FILE = path.join(process.cwd(), "data", "ixacs-connections.json");
 
 let connections = new Map<string, IxacsConnection>();
 let activeId: string | null = null;
 let hydrated = false;
+let hydratePromise: Promise<void> | null = null;
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-function hydrate() {
-  if (hydrated) return;
-  hydrated = true;
-
-  if (!existsSync(STATE_FILE)) {
-    return;
+function normalizeCustomers(value: unknown): IxacsCustomerOption[] {
+  if (!Array.isArray(value)) return [];
+  const items: IxacsCustomerOption[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    const id = typeof record.id === "string" ? record.id.trim() : "";
+    if (!id) continue;
+    const name = typeof record.name === "string" && record.name.trim() ? record.name.trim() : id;
+    items.push({ id, name });
   }
+  return items;
+}
 
+function rowToConnection(row: DbRow): IxacsConnection {
+  return {
+    id: row.id,
+    name: row.name,
+    baseUrl: row.base_url,
+    loginUrl:
+      normalizeLoginUrl(row.login_url ?? "") ||
+      `${row.base_url.replace(/\/+$/, "")}/gateway/web/login`,
+    customerId: row.customer_id ?? "",
+    customers: normalizeCustomers(row.customers),
+    loginId: row.login_id ?? "",
+    password: row.password ?? "",
+    basicAuth: row.basic_auth ?? "",
+    session: row.session ?? "",
+    lineUuids: Array.isArray(row.line_uuids) ? row.line_uuids : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastOkAt: row.last_ok_at,
+    lastError: row.last_error,
+  };
+}
+
+function connectionToRow(connection: IxacsConnection, isActive: boolean): Omit<DbRow, "created_at" | "updated_at"> & {
+  created_at?: string;
+  updated_at?: string;
+} {
+  return {
+    id: connection.id,
+    name: connection.name,
+    base_url: connection.baseUrl,
+    login_url: connection.loginUrl,
+    customer_id: connection.customerId,
+    customers: connection.customers,
+    login_id: connection.loginId,
+    password: connection.password,
+    basic_auth: connection.basicAuth,
+    session: connection.session,
+    line_uuids: connection.lineUuids,
+    is_active: isActive,
+    last_ok_at: connection.lastOkAt,
+    last_error: connection.lastError,
+    created_at: connection.createdAt,
+    updated_at: connection.updatedAt,
+  };
+}
+
+function hydrateFromFile() {
+  if (!existsSync(STATE_FILE)) return;
   try {
     const parsed = JSON.parse(readFileSync(STATE_FILE, "utf8")) as PersistedConnections;
     connections = new Map(
@@ -75,16 +150,73 @@ function hydrate() {
     connections = new Map();
     activeId = null;
   }
-
 }
 
-function persist() {
+async function hydrateFromSupabase() {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+  const { data, error } = await supabase.from("ixacs_connections").select("*").order("created_at", { ascending: true });
+  if (error) throw new Error(`SUPABASE_LOAD_FAILED: ${error.message}`);
+  connections = new Map((data as DbRow[] | null ?? []).map((row) => [row.id, rowToConnection(row)]));
+  activeId = (data as DbRow[] | null ?? []).find((row) => row.is_active)?.id ?? [...connections.keys()][0] ?? null;
+}
+
+async function ensureHydrated() {
+  if (hydrated) return;
+  if (!hydratePromise) {
+    hydratePromise = (async () => {
+      if (supabaseConfigured()) {
+        await hydrateFromSupabase();
+      } else {
+        hydrateFromFile();
+      }
+      hydrated = true;
+    })().finally(() => {
+      hydratePromise = null;
+    });
+  }
+  await hydratePromise;
+}
+
+function persistFile() {
   mkdirSync(path.dirname(STATE_FILE), { recursive: true });
   const payload: PersistedConnections = {
     activeId,
     connections: Object.fromEntries(connections),
   };
   writeFileSync(STATE_FILE, JSON.stringify(payload, null, 2), "utf8");
+}
+
+async function upsertSupabase(connection: IxacsConnection, isActive = connection.id === activeId) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+  const { error } = await supabase.from("ixacs_connections").upsert(connectionToRow(connection, isActive));
+  if (error) throw new Error(`SUPABASE_SAVE_FAILED: ${error.message}`);
+}
+
+async function deleteSupabase(id: string) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+  const { error } = await supabase.from("ixacs_connections").delete().eq("id", id);
+  if (error) throw new Error(`SUPABASE_DELETE_FAILED: ${error.message}`);
+}
+
+async function setActiveSupabase(id: string) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+  const clear = await supabase.from("ixacs_connections").update({ is_active: false }).neq("id", id);
+  if (clear.error) throw new Error(`SUPABASE_SAVE_FAILED: ${clear.error.message}`);
+  const set = await supabase.from("ixacs_connections").update({ is_active: true }).eq("id", id);
+  if (set.error) throw new Error(`SUPABASE_SAVE_FAILED: ${set.error.message}`);
+}
+
+async function persistConnection(connection: IxacsConnection) {
+  connections.set(connection.id, connection);
+  if (supabaseConfigured()) {
+    await upsertSupabase(connection);
+  } else {
+    persistFile();
+  }
 }
 
 export type ConnectionInput = {
@@ -99,20 +231,6 @@ export type ConnectionInput = {
   session?: string;
   lineUuids?: string[] | string;
 };
-
-function normalizeCustomers(value: unknown): IxacsCustomerOption[] {
-  if (!Array.isArray(value)) return [];
-  const items: IxacsCustomerOption[] = [];
-  for (const entry of value) {
-    if (!entry || typeof entry !== "object") continue;
-    const record = entry as Record<string, unknown>;
-    const id = typeof record.id === "string" ? record.id.trim() : "";
-    if (!id) continue;
-    const name = typeof record.name === "string" && record.name.trim() ? record.name.trim() : id;
-    items.push({ id, name });
-  }
-  return items;
-}
 
 function applyInput(current: IxacsConnection, input: ConnectionInput): IxacsConnection {
   const lineUuids = Array.isArray(input.lineUuids)
@@ -141,8 +259,8 @@ function applyInput(current: IxacsConnection, input: ConnectionInput): IxacsConn
   };
 }
 
-export function listConnections(connectionId?: string | null) {
-  hydrate();
+export async function listConnections(connectionId?: string | null) {
+  await ensureHydrated();
   const all = [...connections.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const scoped =
     connectionId === undefined || connectionId === null
@@ -160,13 +278,13 @@ export function listConnections(connectionId?: string | null) {
   };
 }
 
-export function getConnection(id: string) {
-  hydrate();
+export async function getConnection(id: string) {
+  await ensureHydrated();
   return connections.get(id) ?? null;
 }
 
-export function getActiveConnection() {
-  hydrate();
+export async function getActiveConnection() {
+  await ensureHydrated();
   if (activeId) {
     const current = connections.get(activeId);
     if (current) return current;
@@ -174,8 +292,8 @@ export function getActiveConnection() {
   return [...connections.values()][0] ?? null;
 }
 
-export function findConnectionCredentials(customerId: string, loginId: string) {
-  hydrate();
+export async function findConnectionCredentials(customerId: string, loginId: string) {
+  await ensureHydrated();
   return [...connections.values()].filter(
     (connection) =>
       connection.customerId === customerId &&
@@ -184,8 +302,8 @@ export function findConnectionCredentials(customerId: string, loginId: string) {
   );
 }
 
-export function authenticateSavedConnection(customerId: string, loginId: string, password: string) {
-  hydrate();
+export async function authenticateSavedConnection(customerId: string, loginId: string, password: string) {
+  await ensureHydrated();
   const company = customerId.trim().toLowerCase();
   const account = loginId.trim().toLowerCase();
   return [...connections.values()].find((connection) => {
@@ -194,8 +312,8 @@ export function authenticateSavedConnection(customerId: string, loginId: string,
   }) ?? null;
 }
 
-export function createConnection(input: ConnectionInput) {
-  hydrate();
+export async function createConnection(input: ConnectionInput) {
+  await ensureHydrated();
   const id = randomUUID();
   const createdAt = nowIso();
   const connection = applyInput(
@@ -218,9 +336,15 @@ export function createConnection(input: ConnectionInput) {
     },
     input,
   );
+  const makeActive = !activeId;
+  if (makeActive) activeId = id;
   connections.set(id, connection);
-  if (!activeId) activeId = id;
-  persist();
+  if (supabaseConfigured()) {
+    if (makeActive) await setActiveSupabase(id);
+    await upsertSupabase(connection, makeActive);
+  } else {
+    persistFile();
+  }
   return connection;
 }
 
@@ -229,56 +353,62 @@ export function publicConnection(connection: IxacsConnection) {
   return { ...safe, hasPassword: Boolean(password) };
 }
 
-export function updateConnection(id: string, input: ConnectionInput) {
-  hydrate();
+export async function updateConnection(id: string, input: ConnectionInput) {
+  await ensureHydrated();
   const current = connections.get(id);
   if (!current) return null;
   const next = applyInput(current, input);
-  connections.set(id, next);
-  persist();
+  await persistConnection(next);
   return next;
 }
 
-export function deleteConnection(id: string) {
-  hydrate();
+export async function deleteConnection(id: string) {
+  await ensureHydrated();
   const existed = connections.delete(id);
   if (!existed) return false;
   if (activeId === id) {
     activeId = [...connections.keys()][0] ?? null;
   }
-  persist();
+  if (supabaseConfigured()) {
+    await deleteSupabase(id);
+    if (activeId) await setActiveSupabase(activeId);
+  } else {
+    persistFile();
+  }
   return true;
 }
 
-export function setActiveConnection(id: string) {
-  hydrate();
+export async function setActiveConnection(id: string) {
+  await ensureHydrated();
   if (!connections.has(id)) return null;
   activeId = id;
-  persist();
+  if (supabaseConfigured()) {
+    await setActiveSupabase(id);
+  } else {
+    persistFile();
+  }
   return connections.get(id)!;
 }
 
-export function rememberSessionOnActive(session: string) {
-  const active = getActiveConnection();
+export async function rememberSessionOnActive(session: string) {
+  const active = await getActiveConnection();
   if (!active || !session || active.session === session) return;
-  connections.set(active.id, {
+  await persistConnection({
     ...active,
     session,
     updatedAt: nowIso(),
   });
-  persist();
 }
 
-export function rememberSessionOnConnection(id: string, session: string) {
-  hydrate();
+export async function rememberSessionOnConnection(id: string, session: string) {
+  await ensureHydrated();
   const connection = connections.get(id);
   if (!connection || !session || connection.session === session) return;
-  connections.set(id, { ...connection, session, updatedAt: nowIso() });
-  persist();
+  await persistConnection({ ...connection, session, updatedAt: nowIso() });
 }
 
-export function markConnectionResult(id: string, ok: boolean, error?: string | null) {
-  hydrate();
+export async function markConnectionResult(id: string, ok: boolean, error?: string | null) {
+  await ensureHydrated();
   const current = connections.get(id);
   if (!current) return null;
   const next: IxacsConnection = {
@@ -287,25 +417,23 @@ export function markConnectionResult(id: string, ok: boolean, error?: string | n
     lastError: ok ? null : error ?? "Request failed",
     updatedAt: nowIso(),
   };
-  connections.set(id, next);
-  persist();
+  await persistConnection(next);
   return next;
 }
 
-export function rememberConnectionLines(id: string, lineUuids: string[]) {
-  hydrate();
+export async function rememberConnectionLines(id: string, lineUuids: string[]) {
+  await ensureHydrated();
   const current = connections.get(id);
   if (!current) return null;
   const merged = [...new Set([...current.lineUuids, ...lineUuids])];
   if (merged.length === current.lineUuids.length) return current;
   const next = { ...current, lineUuids: merged, updatedAt: nowIso() };
-  connections.set(id, next);
-  persist();
+  await persistConnection(next);
   return next;
 }
 
-export function replaceConnectionLines(id: string, lineUuids: string[]) {
-  hydrate();
+export async function replaceConnectionLines(id: string, lineUuids: string[]) {
+  await ensureHydrated();
   const current = connections.get(id);
   if (!current) return null;
   const nextLines = [...new Set(lineUuids)];
@@ -314,7 +442,6 @@ export function replaceConnectionLines(id: string, lineUuids: string[]) {
     nextLines.every((uuid) => current.lineUuids.includes(uuid));
   if (same) return current;
   const next = { ...current, lineUuids: nextLines, updatedAt: nowIso() };
-  connections.set(id, next);
-  persist();
+  await persistConnection(next);
   return next;
 }

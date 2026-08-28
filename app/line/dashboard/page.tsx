@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function LineDashboardPage() {
   const session = await readLineSessionToken((await cookies()).get(LINE_AUTH_COOKIE)?.value);
   if (!session) redirect("/line/login");
-  const connection = getConnection(session.connectionId);
+  const connection = await getConnection(session.connectionId);
   if (!connection || connection.loginId.trim().toLowerCase() !== session.loginId.trim().toLowerCase()) redirect("/line/login");
   const discovery = await discoverIxacsLines(connectionAsTarget(connection));
   const customers = connection.customers.length ? connection.customers : connection.customerId ? [{ id:connection.customerId, name:connection.name }] : [];

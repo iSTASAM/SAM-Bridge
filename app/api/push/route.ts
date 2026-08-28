@@ -98,7 +98,7 @@ async function handle(request: NextRequest, method: string) {
   if (Number.isFinite(contentLength) && contentLength > 10 * 1024 * 1024) {
     return json({ ok: false, error: "Payload exceeds 10 MB" }, 413);
   }
-  if (!isPushAuthorized(request.headers.get("x-api-key"))) {
+  if (!(await isPushAuthorized(request.headers.get("x-api-key")))) {
     console.log("Rejected request: x-api-key is not valid");
     return json({ ok: false, error: "Invalid x-api-key" }, 401);
   }
@@ -118,7 +118,7 @@ async function handle(request: NextRequest, method: string) {
     if (session) {
       console.log("Captured SESSION from iXacs push:", `${session.slice(0, 8)}...`);
     }
-    const stored = rememberPushBatch(body.parsed, session, request.headers.get("x-api-key"));
+    const stored = await rememberPushBatch(body.parsed, session, request.headers.get("x-api-key"));
     if (stored.acceptedEvents.length > 0) {
       await dispatchPushNotifications(stored.acceptedEvents);
     }
@@ -143,7 +143,7 @@ async function handle(request: NextRequest, method: string) {
     return json({ ...storedResult, ok: true, received: true, receivedAt: new Date().toISOString() });
   }
 
-  const assignment = getPushKeyAssignment(request.headers.get("x-api-key"));
+  const assignment = await getPushKeyAssignment(request.headers.get("x-api-key"));
 
   return json({
     ok: true,

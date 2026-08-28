@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const identity = (await verify.json().catch(() => ({}))) as { sub?: string; name?: string; error_description?: string };
   if (!verify.ok || !identity.sub) return NextResponse.json({ error: "INVALID_LINE_ID_TOKEN" }, { status: 401 });
   try {
-    const connection = authenticateSavedConnection(String(body.customerCompanyId ?? ""), String(body.loginId ?? ""), String(body.password ?? ""));
+    const connection = await authenticateSavedConnection(String(body.customerCompanyId ?? ""), String(body.loginId ?? ""), String(body.password ?? ""));
     if (!connection) throw new Error("INVALID_CREDENTIALS");
     const requestedCustomer = String(body.customerCompanyId ?? "").trim();
     const token = await createLineSessionToken({ connectionId: connection.id, customerId: requestedCustomer || connection.customerId, loginId: connection.loginId, lineUserId: identity.sub });

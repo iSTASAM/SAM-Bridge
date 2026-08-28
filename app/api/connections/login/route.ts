@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const basicAuth =
     normalizeBasicAuth(typeof body.basicAuth === "string" ? body.basicAuth : "");
   const connectionId = typeof body.connectionId === "string" ? body.connectionId : "";
-  const savedConnection = connectionId ? getConnection(connectionId) : null;
+  const savedConnection = connectionId ? await getConnection(connectionId) : null;
   const selectedCustomerId =
     typeof body.selectedCustomerId === "string" ? body.selectedCustomerId.trim() : "";
   const probe = body.probe === true;
@@ -121,26 +121,32 @@ export async function POST(request: Request) {
         : undefined,
   };
 
-  const connection = connectionId
-    ? updateConnection(connectionId, input)
-    : createConnection(input);
+  try {
+    const connection = connectionId
+      ? await updateConnection(connectionId, input)
+      : await createConnection(input);
 
-  if (!connection) {
-    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    if (!connection) {
+      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    }
+
+    await setActiveConnection(connection.id);
+    await markConnectionResult(connection.id, true);
+    const discovery = await discoverIxacsLines(connectionAsTarget(connection));
+    if (discovery.lineUuids.length > 0) {
+      await rememberConnectionLines(connection.id, discovery.lineUuids);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      connectionId: connection.id,
+      hasSession: Boolean(connection.session),
+      lineCount: discovery.lineUuids.length,
+      discoveryError: discovery.error ?? null,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "SAVE_FAILED";
+    console.error("iXacs connection save failed", message);
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-
-  setActiveConnection(connection.id);
-  markConnectionResult(connection.id, true);
-  const discovery = await discoverIxacsLines(connectionAsTarget(connection));
-  if (discovery.lineUuids.length > 0) {
-    rememberConnectionLines(connection.id, discovery.lineUuids);
-  }
-
-  return NextResponse.json({
-    ok: true,
-    connectionId: connection.id,
-    hasSession: Boolean(connection.session),
-    lineCount: discovery.lineUuids.length,
-    discoveryError: discovery.error ?? null,
-  });
 }

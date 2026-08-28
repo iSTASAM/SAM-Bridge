@@ -5,7 +5,7 @@ import { getIssuedKey, revokeApiKey, setApiKeyStatus } from "@/lib/ixacs-store";
 export const dynamic = "force-dynamic";
 
 async function assertKeyAccess(key: string) {
-  const issued = getIssuedKey(key);
+  const issued = await getIssuedKey(key);
   if (!issued) return { error: NextResponse.json({ error: "Key not found" }, { status: 404 }) } as const;
   const session = await getRequestSession();
   if (issued.connectionId && !canAccessConnection(session, issued.connectionId)) {
@@ -26,7 +26,7 @@ export async function PATCH(
   if (!status) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
-  const updated = setApiKeyStatus(key, status);
+  const updated = await setApiKeyStatus(key, status);
   if (!updated) {
     return NextResponse.json({ error: "Key not found" }, { status: 404 });
   }
@@ -40,7 +40,7 @@ export async function DELETE(
   const { key } = await params;
   const access = await assertKeyAccess(key);
   if ("error" in access) return access.error;
-  if (!revokeApiKey(key)) {
+  if (!(await revokeApiKey(key))) {
     return NextResponse.json({ error: "Key not found" }, { status: 404 });
   }
   return NextResponse.json({ ok: true });

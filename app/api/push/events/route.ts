@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   }
   const connectionId = scope ?? requestedConnectionId;
   const status = query.get("status");
-  const result = getPushEvents({
+  const result = await getPushEvents({
     connectionId,
     lineUuid: query.get("lineUuid"),
     statusUuid: query.get("statusUuid"),
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   });
   return NextResponse.json({
     ...result,
-    companies: listConnections(scope).connections.map(({ id, name }) => ({ id, name })),
+    companies: (await listConnections(scope)).connections.map(({ id, name }) => ({ id, name })),
   });
 }
 
@@ -42,5 +42,5 @@ export async function DELETE(request: NextRequest) {
   if (!canAccessConnection(session, connectionId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  return NextResponse.json({ ok: true, deleted: deletePushEvents(connectionId, lineUuid) });
+  return NextResponse.json({ ok: true, deleted: await deletePushEvents(connectionId, lineUuid) });
 }

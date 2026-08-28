@@ -123,7 +123,7 @@ async function fetchRowsForActiveSession(args: {
   let lineUuids =
     discovered.lineUuids.length > 0 ? discovered.lineUuids : connection.lineUuids;
   if (discovered.lineUuids.length > 0) {
-    replaceConnectionLines(id, discovered.lineUuids);
+    await replaceConnectionLines(id, discovered.lineUuids);
   }
 
   if (lineUuids.length === 0) {
@@ -169,7 +169,7 @@ async function fetchRowsForActiveSession(args: {
   ]);
   const resultsOk = monitorResult.ok && detailResult.ok;
   const resultError = monitorResult.error ?? detailResult.error;
-  markConnectionResult(id, resultsOk, resultError);
+  await markConnectionResult(id, resultsOk, resultError);
   if (!resultsOk) {
     return {
       ok: false as const,
@@ -240,7 +240,7 @@ async function fetchRowsForActiveSession(args: {
         : {}),
     };
   });
-  rememberConnectionLines(id, rows.map((row) => row.uuid));
+  await rememberConnectionLines(id, rows.map((row) => row.uuid));
   const monitorLineUuids = new Set(monitorRows.map((row) => row.uuid));
   const detailLineUuids = new Set(detailRows.map((row) => row.uuid));
   const missingMonitorLineUuids = lineUuids.filter((uuid) => !monitorLineUuids.has(uuid));
@@ -289,7 +289,7 @@ export async function POST(
   if (!canAccessConnection(session, id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  let connection = getConnection(id);
+  let connection = await getConnection(id);
   if (!connection) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (!connection.baseUrl) {
@@ -344,7 +344,7 @@ export async function POST(
         }
         connection = activated.connection;
       } else {
-        connection = getConnection(id) ?? connection;
+        connection = await getConnection(id) ?? connection;
       }
 
       const result = await fetchRowsForActiveSession({

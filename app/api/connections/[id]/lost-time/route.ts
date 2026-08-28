@@ -73,9 +73,13 @@ function hydrateLineCache() {
   }
 }
 
-export function getCachedLostTimeLine(connectionId: string, lineUuid: string, date: string): CachedLineResult | null {
+export async function getCachedLostTimeLine(
+  connectionId: string,
+  lineUuid: string,
+  date: string,
+): Promise<CachedLineResult | null> {
   hydrateLineCache();
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection) return null;
   const prefix = `${connectionId}:${connection.baseUrl}:`;
   const suffix = `:${lineUuid}:${date}`;
@@ -86,9 +90,9 @@ export function getCachedLostTimeLine(connectionId: string, lineUuid: string, da
   return null;
 }
 
-export function getCachedLostTimeTopics(connectionId: string): StatusGunttTopic[] {
+export async function getCachedLostTimeTopics(connectionId: string): Promise<StatusGunttTopic[]> {
   hydrateLineCache();
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection) return [];
   const prefix = `${connectionId}:${connection.baseUrl}:`;
   const topics = new Map<string, StatusGunttTopic>();
@@ -248,7 +252,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!canAccessConnection(session, id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  let connection = getConnection(id);
+  let connection = await getConnection(id);
   if (!connection) return NextResponse.json({ error: "Company not found" }, { status: 404 });
   let activeConnection: IxacsConnection = connection;
 
@@ -291,7 +295,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       }
       activeConnection = activated.connection;
     } else {
-      activeConnection = getConnection(id) ?? activeConnection;
+      activeConnection = await getConnection(id) ?? activeConnection;
     }
 
     const label =

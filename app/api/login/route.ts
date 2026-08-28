@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const loginId = typeof body?.loginId === "string" ? body.loginId.trim() : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  const candidates = findConnectionCredentials(customerId, loginId);
+  const candidates = await findConnectionCredentials(customerId, loginId);
   const connection = (await Promise.all(candidates.map(async (candidate) =>
     (await safeCredentialsMatch(
       `${customerId}\u0000${loginId}`,

@@ -62,7 +62,7 @@ export async function testSlackNotification(rule: NotificationRule) {
 }
 
 export async function monitorSlackNotification(rule: NotificationRule) {
-  let connection = getConnection(rule.connectionId);
+  let connection = await getConnection(rule.connectionId);
   if (!connection) throw new Error("CONNECTION_NOT_FOUND");
   if (connection.customerId !== rule.customerId || !connection.session) {
     const activated = await activateConnectionCustomer(rule.connectionId, rule.customerId, { rediscover: false });
@@ -71,7 +71,7 @@ export async function monitorSlackNotification(rule: NotificationRule) {
   }
   const target = connectionAsTarget(connection);
   const monitor = await getCtMonitorData(target, rule.lines.map((line) => line.uuid));
-  markConnectionResult(connection.id, monitor.ok, monitor.error);
+  await markConnectionResult(connection.id, monitor.ok, monitor.error);
   if (!monitor.ok) throw new Error(monitor.error ?? "IXACS_MONITOR_FAILED");
   const rows = summarizeMonitorJson(monitor.responseJson).filter((row) => rule.lines.some((line) => line.uuid === row.uuid));
   const current = Object.fromEntries(rows.map((row) => [row.uuid, row.statusUuid]));

@@ -25,7 +25,7 @@ export async function POST(
   if (!canAccessConnection(session, id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const connection = getConnection(id);
+  const connection = await getConnection(id);
   if (!connection) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = (await request.json().catch(() => ({}))) as { probe?: boolean };
@@ -40,7 +40,7 @@ export async function POST(
 
   if (body.probe) {
     const result = await probeIxacs(target);
-    markConnectionResult(id, result.ok, result.error);
+    await markConnectionResult(id, result.ok, result.error);
     return NextResponse.json(
       {
         ok: result.ok,
@@ -56,7 +56,7 @@ export async function POST(
   if (lineUuids.length === 0) {
     const discovery = await discoverIxacsLines(target);
     if (discovery.lineUuids.length > 0) {
-      rememberConnectionLines(id, discovery.lineUuids);
+      await rememberConnectionLines(id, discovery.lineUuids);
       lineUuids = discovery.lineUuids;
     }
   }
@@ -74,7 +74,7 @@ export async function POST(
     );
   }
   const result = await getCtMonitorData(target, lineUuids);
-  markConnectionResult(id, result.ok, result.error);
+  await markConnectionResult(id, result.ok, result.error);
 
   if (!result.ok) {
     return NextResponse.json(
@@ -91,11 +91,11 @@ export async function POST(
   }
 
   const rows = summarizeMonitorJson(result.responseJson);
-  rememberConnectionLines(
+  await rememberConnectionLines(
     id,
     rows.map((row) => row.uuid),
   );
-  const applied = applyMonitorRows(rows);
+  const applied = await applyMonitorRows(rows);
 
   return NextResponse.json({
     ok: true,

@@ -24,7 +24,7 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let connection = getConnection(id);
+  let connection = await getConnection(id);
   if (!connection) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -68,7 +68,7 @@ export async function POST(
       }
       connection = activated.connection;
     } else {
-      connection = getConnection(id) ?? connection;
+      connection = await getConnection(id) ?? connection;
     }
 
     const target = connectionAsTarget(connection);
@@ -86,7 +86,7 @@ export async function POST(
 
     const discovery = await discoverIxacsLines(target);
     if (discovery.lineUuids.length > 0) {
-      rememberConnectionLines(id, discovery.lineUuids);
+      await rememberConnectionLines(id, discovery.lineUuids);
     }
 
     return NextResponse.json({

@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ uuid: string }> },
 ) {
   const { uuid } = await params;
-  const board = getLineBoard(uuid, request.nextUrl.searchParams.get("day"));
+  const board = await getLineBoard(uuid, request.nextUrl.searchParams.get("day"));
   if (!board) {
     return NextResponse.json({ error: "Line not found" }, { status: 404 });
   }

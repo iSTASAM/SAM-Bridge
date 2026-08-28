@@ -117,7 +117,7 @@ export async function POST(request: Request) {
   }
 
   for (const id of connectionIds) {
-    const connection = getConnection(id);
+    const connection = await getConnection(id);
     if (!connection) continue;
     const target = connectionAsTarget(connection);
     const discovery = await discoverIxacsLines(target);

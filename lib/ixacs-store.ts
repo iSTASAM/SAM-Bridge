@@ -201,7 +201,7 @@ function historyList(lineUuid: string) {
   return list;
 }
 
-function hydrate() {
+async function hydrate() {
   if (hydrated) return;
   hydrated = true;
 
@@ -245,7 +245,7 @@ function hydrate() {
       );
       historyByLine = new Map(Object.entries(parsed.historyByLine ?? {}));
       pushEvents = Array.isArray(parsed.pushEvents) ? parsed.pushEvents.slice(-MAX_PUSH_EVENTS) : [];
-      const availableConnections = listConnections().connections;
+      const availableConnections = (await listConnections()).connections;
       apiKeys = new Map(
         Object.entries(parsed.apiKeys ?? {}).map(([key, item]) => {
           const inferredConnection = item.lineUuid
@@ -413,12 +413,12 @@ function bindKeyToLine(apiKey: string | null, lineUuid: string) {
   if (!issued.lineUuid) issued.lineUuid = lineUuid;
 }
 
-function rememberPushItem(
+async function rememberPushItem(
   parsed: unknown,
   sessionFromRequest: string | null,
   apiKeyFromHeader: string | null = null,
 ) {
-  hydrate();
+  await hydrate();
 
   const issuedKey = apiKeyFromHeader ? apiKeys.get(apiKeyFromHeader) ?? null : null;
   const connectionId = issuedKey?.connectionId ?? null;
@@ -443,7 +443,7 @@ function rememberPushItem(
   const lineUuid = readUuid(line?.uuid) ?? readUuid(status?.productionLineUuid);
   if (!lineUuid) return { ok: false, error: "MISSING_LINE_UUID" } as const;
 
-  const assignedConnection = connectionId ? getConnection(connectionId) : null;
+  const assignedConnection = connectionId ? await getConnection(connectionId) : null;
   if (issuedKey && !assignedConnection) {
     return { ok: false, error: "KEY_HAS_NO_COMPANY" } as const;
   }
@@ -468,12 +468,12 @@ function rememberPushItem(
     // Keep login-backed connection sessions intact. Push SESSION tokens often
     // cannot call ctMonitor/regist and would break status changes.
     if (connectionId) {
-      const assigned = getConnection(connectionId);
+      const assigned = await getConnection(connectionId);
       if (assigned && !assigned.password) {
-        rememberSessionOnConnection(connectionId, sessionFromRequest);
+        await rememberSessionOnConnection(connectionId, sessionFromRequest);
       }
     } else {
-      rememberSessionOnActive(sessionFromRequest);
+      await rememberSessionOnActive(sessionFromRequest);
     }
   }
 
@@ -527,7 +527,7 @@ function pushItems(parsed: unknown): unknown[] {
   return [parsed];
 }
 
-function recordPushEvent(
+async function recordPushEvent(
   item: unknown,
   apiKey: string | null,
   result: { ok: boolean; error?: string },
@@ -539,7 +539,7 @@ function recordPushEvent(
   const style = asRecord(root?.andonStatusStyle);
   const product = asRecord(root?.product);
   const issued = apiKey ? apiKeys.get(apiKey) ?? null : null;
-  const connection = issued?.connectionId ? getConnection(issued.connectionId) : null;
+  const connection = issued?.connectionId ? await getConnection(issued.connectionId) : null;
   const lineUuid = readUuid(line?.uuid) ?? readUuid(status?.productionLineUuid) ?? issued?.lineUuid ?? null;
   const statusUuid = readUuid(style?.uuid) ?? readUuid(status?.andonStatusStyleUuid);
   const knownStatus = lineUuid && statusUuid ? statusMap(lineUuid).get(statusUuid) ?? null : null;
@@ -587,12 +587,12 @@ function recordPushEvent(
   return event;
 }
 
-export function rememberPushBatch(
+export async function rememberPushBatch(
   parsed: unknown,
   sessionFromRequest: string | null,
   apiKeyFromHeader: string | null = null,
 ) {
-  hydrate();
+  await hydrate();
   const items = pushItems(parsed);
   if (items.length > 5_000) {
     return { ok: false, error: "TOO_MANY_RECORDS", accepted: 0, rejected: items.length, acceptedEvents: [] as PushEvent[] } as const;
@@ -603,9 +603,9 @@ export function rememberPushBatch(
   let assignment: { connectionId: string | null; lineUuid: string } | null = null;
   const acceptedEvents: PushEvent[] = [];
   for (const item of items) {
-    const result = rememberPushItem(item, sessionFromRequest, apiKeyFromHeader);
+    const result = await rememberPushItem(item, sessionFromRequest, apiKeyFromHeader);
     if (result.ok) {
-      acceptedEvents.push(recordPushEvent(item, apiKeyFromHeader, result));
+      acceptedEvents.push(await recordPushEvent(item, apiKeyFromHeader, result));
       accepted += 1;
       assignment = { connectionId: result.connectionId, lineUuid: result.lineUuid };
     } else {
@@ -636,7 +636,7 @@ function matchesPushSearch(event: PushEvent, search: string) {
   ].some((value) => value?.toLowerCase().includes(search));
 }
 
-export function getPushEvents(input: {
+export async function getPushEvents(input: {
   connectionId?: string | null;
   lineUuid?: string | null;
   statusUuid?: string | null;
@@ -646,7 +646,7 @@ export function getPushEvents(input: {
   limit?: number;
   latestPerLine?: boolean;
 }) {
-  hydrate();
+  await hydrate();
   const search = input.search?.trim().toLowerCase() ?? "";
   const scoped = [...pushEvents].reverse().filter((event) => {
     if (input.connectionId != null && event.connectionId !== input.connectionId) return false;
@@ -706,8 +706,8 @@ export function getPushEvents(input: {
   };
 }
 
-export function deletePushEvents(connectionId: string, lineUuid: string) {
-  hydrate();
+export async function deletePushEvents(connectionId: string, lineUuid: string) {
+  await hydrate();
   const before = pushEvents.length;
   pushEvents = pushEvents.filter(
     (event) => event.connectionId !== connectionId || event.lineUuid !== lineUuid,
@@ -717,8 +717,8 @@ export function deletePushEvents(connectionId: string, lineUuid: string) {
   return deleted;
 }
 
-export function deletePushEvent(id: string) {
-  hydrate();
+export async function deletePushEvent(id: string) {
+  await hydrate();
   const next = pushEvents.filter((event) => event.id !== id);
   if (next.length === pushEvents.length) return false;
   pushEvents = next;
@@ -726,17 +726,17 @@ export function deletePushEvent(id: string) {
   return true;
 }
 
-export function getPushEvent(id: string) {
-  hydrate();
+export async function getPushEvent(id: string) {
+  await hydrate();
   return pushEvents.find((event) => event.id === id) ?? null;
 }
 
-export function rememberPush(
+export async function rememberPush(
   parsed: unknown,
   sessionFromRequest: string | null,
   apiKeyFromHeader: string | null = null,
 ) {
-  return rememberPushBatch(parsed, sessionFromRequest, apiKeyFromHeader);
+  return await rememberPushBatch(parsed, sessionFromRequest, apiKeyFromHeader);
 }
 
 function clipHistory(
@@ -785,8 +785,8 @@ function statusAtTime(lineUuid: string, history: HistorySegment[], at: number) {
   return statusMap(lineUuid).get(uuid) ?? null;
 }
 
-export function getOverview(dayRaw?: string | null, connectionId?: string | null) {
-  hydrate();
+export async function getOverview(dayRaw?: string | null, connectionId?: string | null) {
+  await hydrate();
   const now = Date.now();
   const day = resolveDayKey(dayRaw, now);
   const currentDay = productionDayKey(now);
@@ -835,12 +835,12 @@ export function getOverview(dayRaw?: string | null, connectionId?: string | null
   };
 }
 
-export function getLineBoard(lineUuid: string, dayRaw?: string | null) {
-  hydrate();
+export async function getLineBoard(lineUuid: string, dayRaw?: string | null) {
+  await hydrate();
   const line = lines.get(lineUuid);
   if (!line) return null;
   const group = groups.get(line.groupUuid) ?? null;
-  const connection = line.connectionId ? getConnection(line.connectionId) : null;
+  const connection = line.connectionId ? await getConnection(line.connectionId) : null;
   const now = Date.now();
   const day = resolveDayKey(dayRaw, now);
   const currentDay = productionDayKey(now);
@@ -885,7 +885,7 @@ export function getLineBoard(lineUuid: string, dayRaw?: string | null) {
   };
 }
 
-export function issueApiKey(input: {
+export async function issueApiKey(input: {
   connectionId: string;
   groupUuid: string;
   groupName: string;
@@ -895,8 +895,8 @@ export function issueApiKey(input: {
   environment?: KeyEnvironment;
   expiresAt?: string | null;
 }) {
-  hydrate();
-  const connection = getConnection(input.connectionId);
+  await hydrate();
+  const connection = await getConnection(input.connectionId);
   if (!connection || !connection.lineUuids.includes(input.lineUuid)) return null;
   const key = randomUUID();
   const name = input.name?.trim() || input.lineName;
@@ -918,20 +918,20 @@ export function issueApiKey(input: {
   return apiKeys.get(key)!;
 }
 
-export function getIssuedKey(key: string) {
-  hydrate();
+export async function getIssuedKey(key: string) {
+  await hydrate();
   return apiKeys.get(key) ?? null;
 }
 
-export function revokeApiKey(key: string) {
-  hydrate();
+export async function revokeApiKey(key: string) {
+  await hydrate();
   const existed = apiKeys.delete(key);
   if (existed) persist();
   return existed;
 }
 
-export function setApiKeyStatus(key: string, status: KeyStatus) {
-  hydrate();
+export async function setApiKeyStatus(key: string, status: KeyStatus) {
+  await hydrate();
   const issued = apiKeys.get(key);
   if (!issued) return null;
   issued.status = status;
@@ -939,8 +939,8 @@ export function setApiKeyStatus(key: string, status: KeyStatus) {
   return issued;
 }
 
-export function rotateApiKey(key: string) {
-  hydrate();
+export async function rotateApiKey(key: string) {
+  await hydrate();
   const issued = apiKeys.get(key);
   if (!issued) return null;
   const next = randomUUID();
@@ -950,15 +950,15 @@ export function rotateApiKey(key: string) {
   return apiKeys.get(next)!;
 }
 
-export function getIssuedKeys(connectionId?: string | null) {
-  hydrate();
-  return [...apiKeys.values()]
+export async function getIssuedKeys(connectionId?: string | null) {
+  await hydrate();
+  return Promise.all([...apiKeys.values()]
     .filter((item) => connectionId == null || item.connectionId === connectionId)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map((item) => {
+    .map(async (item) => {
       const line = item.lineUuid ? lines.get(item.lineUuid) ?? null : null;
       const group = line ? groups.get(line.groupUuid) ?? null : null;
-      const connection = item.connectionId ? getConnection(item.connectionId) : null;
+      const connection = item.connectionId ? await getConnection(item.connectionId) : null;
       return {
         key: item.key,
         createdAt: item.createdAt,
@@ -989,13 +989,14 @@ export function getIssuedKeys(connectionId?: string | null) {
             ? { uuid: item.groupUuid, nameTh: item.groupName, nameEn: item.groupName, nameJa: item.groupName }
             : null,
       };
-    });
+    }),
+  );
 }
 
-export function applyMonitorRows(
+export async function applyMonitorRows(
   rows: { uuid: string; statusUuid: string | null; productUuid: string | null }[],
 ) {
-  hydrate();
+  await hydrate();
   const receivedAt = new Date().toISOString();
   let updated = 0;
 
@@ -1016,35 +1017,35 @@ export function applyMonitorRows(
   return updated;
 }
 
-export function knownLineUuids() {
-  hydrate();
+export async function knownLineUuids() {
+  await hydrate();
   return [...lines.keys()].filter((id) => id !== UNGROUPED);
 }
 
-export function getLine(lineUuid: string) {
-  hydrate();
+export async function getLine(lineUuid: string) {
+  await hydrate();
   return lines.get(lineUuid) ?? null;
 }
 
-export function isStatusForLine(lineUuid: string, statusUuid: string) {
-  hydrate();
+export async function isStatusForLine(lineUuid: string, statusUuid: string) {
+  await hydrate();
   return statusMap(lineUuid).has(statusUuid);
 }
 
-export function getSession(): string | null {
-  hydrate();
-  return getActiveConnection()?.session || webhookSession || null;
+export async function getSession(): Promise<string | null> {
+  await hydrate();
+  return (await getActiveConnection())?.session || webhookSession || null;
 }
 
-export function getSessionSource(): "connection" | "webhook" | null {
-  hydrate();
-  if (getActiveConnection()?.session) return "connection";
+export async function getSessionSource(): Promise<"connection" | "webhook" | null> {
+  await hydrate();
+  if ((await getActiveConnection())?.session) return "connection";
   if (webhookSession) return "webhook";
   return null;
 }
 
-export function isPushAuthorized(apiKey: string | null) {
-  hydrate();
+export async function isPushAuthorized(apiKey: string | null) {
+  await hydrate();
   if (process.env.PUSH_API_KEY && apiKey === process.env.PUSH_API_KEY) return true;
   if (!apiKey) return false;
   const issued = apiKeys.get(apiKey);
@@ -1054,8 +1055,8 @@ export function isPushAuthorized(apiKey: string | null) {
   return true;
 }
 
-export function getPushKeyAssignment(apiKey: string | null) {
-  hydrate();
+export async function getPushKeyAssignment(apiKey: string | null) {
+  await hydrate();
   if (!apiKey) return null;
   const issued = apiKeys.get(apiKey);
   if (!issued) return null;

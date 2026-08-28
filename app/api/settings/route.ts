@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await getRequestSession();
   const scope = sessionConnectionScope(session);
-  const overview = getOverview(null, scope);
+  const overview = await getOverview(null, scope);
   return NextResponse.json({
-    keys: getIssuedKeys(scope),
-    companies: listConnections(scope).connections.map(({ id, name }) => ({ id, name })),
+    keys: await getIssuedKeys(scope),
+    companies: (await listConnections(scope)).connections.map(({ id, name }) => ({ id, name })),
     groups: overview.groups,
   });
 }

@@ -14,7 +14,7 @@ export async function GET(
   if (!canAccessConnection(session, id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const connection = getConnection(id);
+  const connection = await getConnection(id);
   if (!connection) return NextResponse.json({ error: "Company not found" }, { status: 404 });
 
   const discovery = await discoverIxacsLines(connectionAsTarget(connection));
@@ -24,6 +24,6 @@ export async function GET(
       { status: 502 },
     );
   }
-  if (discovery.lineUuids.length > 0) rememberConnectionLines(id, discovery.lineUuids);
+  if (discovery.lineUuids.length > 0) await rememberConnectionLines(id, discovery.lineUuids);
   return NextResponse.json({ groups: discovery.groups });
 }

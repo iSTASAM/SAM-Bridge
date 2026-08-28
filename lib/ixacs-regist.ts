@@ -98,7 +98,7 @@ export async function registCtMonitor(
   connectionId: string,
   sessionOverride: string | null = null,
 ): Promise<RegistResult> {
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection) {
     return {
       ok: false,

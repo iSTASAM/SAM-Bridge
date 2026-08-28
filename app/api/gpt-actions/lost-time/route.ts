@@ -151,7 +151,7 @@ export async function GET(request: Request) {
   }
   const url = new URL(request.url);
   const companyId = url.searchParams.get("companyId")?.trim() ?? "";
-  const company = companyId ? getConnection(companyId) : null;
+  const company = companyId ? await getConnection(companyId) : null;
   if (!company) {
     return NextResponse.json({ error: "Company not found" }, { status: 404 });
   }

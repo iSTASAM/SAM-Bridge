@@ -102,7 +102,7 @@ export async function GET(request: Request) {
   const companyId = url.searchParams.get("companyId")?.trim() ?? "";
   const lineId = url.searchParams.get("lineId")?.trim() ?? "";
   const lineName = url.searchParams.get("lineName")?.trim() ?? "";
-  const company = companyId ? getConnection(companyId) : null;
+  const company = companyId ? await getConnection(companyId) : null;
   if (!company) {
     return NextResponse.json({ error: "Company not found" }, { status: 404 });
   }

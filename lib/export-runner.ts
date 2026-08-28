@@ -326,7 +326,7 @@ export async function runSlackExport(config: ExportConfig) {
   if (config.triggerMode !== "data-change" || !config.alertRules?.length) {
     throw new Error("ALERT_RULES_REQUIRED");
   }
-  const connection = getConnection(config.sourceConnectionId);
+  const connection = await getConnection(config.sourceConnectionId);
   if (!connection) throw new Error("CONNECTION_NOT_FOUND");
 
   const target = connectionAsTarget(connection);
@@ -348,7 +348,7 @@ export async function runSlackExport(config: ExportConfig) {
     getCtMonitorDetailData(target, lineUuids),
     getCtMonitorData(target, lineUuids),
   ]);
-  markConnectionResult(connection.id, result.ok && monitorResult.ok, result.error ?? monitorResult.error);
+  await markConnectionResult(connection.id, result.ok && monitorResult.ok, result.error ?? monitorResult.error);
   if (!result.ok || !monitorResult.ok) throw new Error(result.error ?? monitorResult.error ?? "IXACS_DATA_FAILED");
   const currentCtByLine = new Map(summarizeMonitorJson(monitorResult.responseJson).map((row) => [row.uuid, row.cycleTime]));
 

@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ key: string }> },
 ) {
   const { key } = await params;
-  const issued = getIssuedKey(key);
+  const issued = await getIssuedKey(key);
   if (!issued) {
     return NextResponse.json({ error: "Key not found" }, { status: 404 });
   }
@@ -17,7 +17,7 @@ export async function POST(
   if (issued.connectionId && !canAccessConnection(session, issued.connectionId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const rotated = rotateApiKey(key);
+  const rotated = await rotateApiKey(key);
   if (!rotated) {
     return NextResponse.json({ error: "Key not found" }, { status: 404 });
   }

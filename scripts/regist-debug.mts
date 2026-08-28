@@ -5,7 +5,7 @@ import { writeFileSync } from "fs";
 
 async function main() {
   const logs: unknown[] = [];
-  const connection = getConnection("a696b4ae-d36a-4e12-b452-76266b59022b");
+  const connection = await getConnection("a696b4ae-d36a-4e12-b452-76266b59022b");
   if (!connection) throw new Error("no connection");
 
   const login = await loginIxacs({

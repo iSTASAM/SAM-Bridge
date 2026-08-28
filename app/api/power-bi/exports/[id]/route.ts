@@ -201,7 +201,7 @@ async function productionDailyWindowsFast(connectionId: string, from: string, to
     return { bodies: dates.map((date) => bodiesByDate.get(date)!), warnings: [] };
   }
 
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection) return { bodies: [], warnings: [{ from, to, error: "CONNECTION_NOT_FOUND" }] };
   const target = connectionAsTarget(connection);
   const releaseLock = await acquireIxacsConnectionLock(connectionId);
@@ -349,16 +349,22 @@ async function priorityLostTimeForDates(requestUrl: string, connectionId: string
   }
 }
 
-function cachedLostTimeForDates(connectionId: string, from: string, to: string, bodies: ProductionBody[]) {
+async function cachedLostTimeForDates(connectionId: string, from: string, to: string, bodies: ProductionBody[]) {
   const values = new Map<string, Row>();
   const missingDates = new Set<string>();
-  const globalLabels = [...new Set(getCachedLostTimeTopics(connectionId).map((topic) => lostTimeTopicLabel(topic as unknown as Row)).filter(Boolean))];
+  const globalLabels = [
+    ...new Set(
+      (await getCachedLostTimeTopics(connectionId))
+        .map((topic) => lostTimeTopicLabel(topic as unknown as Row))
+        .filter(Boolean),
+    ),
+  ];
   for (const body of bodies) {
     const date = String(body.dateFrom ?? from);
     if (date < from || date > to) continue;
     for (const row of body.rows ?? []) {
       const lineUuid = String(row.uuid ?? row.productionLineUuid ?? "");
-      const cached = getCachedLostTimeLine(connectionId, lineUuid, date);
+      const cached = await getCachedLostTimeLine(connectionId, lineUuid, date);
       const columns: Row = Object.fromEntries(globalLabels.map((label) => [label, null]));
       if (!cached) {
         missingDates.add(date);
@@ -462,7 +468,7 @@ export async function serveTabularExport(request: Request, id: string, destinati
         ? await priorityLostTimeForDates(request.url, config.sourceConnectionId, range.from, range.to)
         : { values: new Map<string, Row>(), warnings: [] as Array<{ from: string; to: string; error: string }> };
       if (destination === "excel" && table === "production") {
-        const cached = cachedLostTimeForDates(config.sourceConnectionId, range.from, range.to, result.bodies);
+        const cached = await cachedLostTimeForDates(config.sourceConnectionId, range.from, range.to, result.bodies);
         lostTime.values = cached.values;
         const today = bangkokToday();
         if (range.from <= today && range.to >= today) {

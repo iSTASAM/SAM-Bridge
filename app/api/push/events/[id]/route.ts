@@ -9,7 +9,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const event = getPushEvent(id);
+  const event = await getPushEvent(id);
   if (!event) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
@@ -17,7 +17,7 @@ export async function DELETE(
   if (event.connectionId && !canAccessConnection(session, event.connectionId)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  if (!deletePushEvent(id)) {
+  if (!(await deletePushEvent(id))) {
     return NextResponse.json({ error: "Event not found" }, { status: 404 });
   }
   return NextResponse.json({ ok: true });

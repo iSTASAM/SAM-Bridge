@@ -47,12 +47,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
-  const connection = getConnection(connectionId);
-  const line = getLine(productionLineUuid);
+  const connection = await getConnection(connectionId);
+  const line = await getLine(productionLineUuid);
   if (!connection || !line || line.connectionId !== connectionId || !connection.lineUuids.includes(productionLineUuid)) {
     return NextResponse.json({ ok: false, error: "Line does not belong to this company" }, { status: 403 });
   }
-  if (!isStatusForLine(productionLineUuid, andonStatusStyleUuid)) {
+  if (!(await isStatusForLine(productionLineUuid, andonStatusStyleUuid))) {
     return NextResponse.json({ ok: false, error: "Status is not available for this line" }, { status: 400 });
   }
 

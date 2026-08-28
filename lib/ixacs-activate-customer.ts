@@ -41,7 +41,7 @@ export async function activateConnectionCustomer(
   customerId: string,
   opts?: { rediscover?: boolean },
 ): Promise<ActivateCustomerResult> {
-  const connection = getConnection(connectionId);
+  const connection = await getConnection(connectionId);
   if (!connection) {
     return { ok: false, error: "Not found", status: 404 };
   }
@@ -70,7 +70,7 @@ export async function activateConnectionCustomer(
     });
 
     if (!login.ok || !login.session) {
-      markConnectionResult(connection.id, false, login.error ?? "LOGIN_FAILED");
+      await markConnectionResult(connection.id, false, login.error ?? "LOGIN_FAILED");
       return {
         ok: false,
         error: login.error ?? "LOGIN_FAILED",
@@ -78,8 +78,8 @@ export async function activateConnectionCustomer(
       };
     }
 
-    replaceConnectionLines(connection.id, []);
-    const updated = updateConnection(connection.id, {
+    await replaceConnectionLines(connection.id, []);
+    const updated = await updateConnection(connection.id, {
       customerId,
       session: login.session,
       basicAuth: login.basicAuth || connection.basicAuth,
@@ -87,11 +87,11 @@ export async function activateConnectionCustomer(
     if (!updated) {
       return { ok: false, error: "Not found", status: 404 };
     }
-    markConnectionResult(updated.id, true);
+    await markConnectionResult(updated.id, true);
     clearConnectionCaches(updated.id);
   }
 
-  const fresh = getConnection(connectionId);
+  const fresh = await getConnection(connectionId);
   if (!fresh) {
     return { ok: false, error: "Not found", status: 404 };
   }
@@ -103,12 +103,12 @@ export async function activateConnectionCustomer(
     const discovery = await discoverIxacsLines(connectionAsTarget(fresh));
     groupCount = discovery.groups.length;
     if (discovery.lineUuids.length > 0) {
-      replaceConnectionLines(fresh.id, discovery.lineUuids);
+      await replaceConnectionLines(fresh.id, discovery.lineUuids);
       lineCount = discovery.lineUuids.length;
     }
   }
 
-  const latest = getConnection(connectionId) ?? fresh;
+  const latest = (await getConnection(connectionId)) ?? fresh;
   return { ok: true, connection: latest, lineCount, groupCount };
 }
 

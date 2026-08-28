@@ -71,7 +71,7 @@ export function connectionAsTarget(connection: IxacsConnection): IxacsTarget {
           import("@/lib/ixacs-login"),
           import("@/lib/ixacs-connections"),
         ]);
-        const current = connectionStore.getConnection(connection.id);
+        const current = await connectionStore.getConnection(connection.id);
         if (!current?.password) return "";
         const login = await loginIxacs({
           loginUrl: current.loginUrl,
@@ -82,7 +82,7 @@ export function connectionAsTarget(connection: IxacsConnection): IxacsTarget {
           basicAuth: current.basicAuth,
         });
         if (!login.ok || !login.session) {
-          connectionStore.markConnectionResult(
+          await connectionStore.markConnectionResult(
             connection.id,
             false,
             login.error ?? "Automatic login failed",
@@ -90,7 +90,7 @@ export function connectionAsTarget(connection: IxacsConnection): IxacsTarget {
           return "";
         }
         target.session = login.session;
-        connectionStore.rememberSessionOnConnection(connection.id, login.session);
+        await connectionStore.rememberSessionOnConnection(connection.id, login.session);
         return login.session;
       })().finally(() => {
         refreshing = null;
