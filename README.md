@@ -1,36 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SAM Bridge
 
-## Getting Started
+เชื่อมข้อมูลจาก iXacs ไปยังระบบที่องค์กรใช้งาน ผ่านจุดเชื่อมต่อเดียว
 
-First, run the development server:
+## วิธีใช้กับ ngrok
+
+1. ติดตั้ง dependencies แล้วรันเซิร์ฟเวอร์
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. เปิด HTTPS ไปที่พอร์ต 4525
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+ngrok http 4525
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. ใน Web Application กรอก
 
-## Learn More
+- **Push Api Url:** `https://<ngrok-host>` (หรือ `https://<ngrok-host>/api/push`)
+- **x-api-key:** ค่าใดก็ได้ (หรือค่าเดียวกับ `PUSH_API_KEY` ถ้าตั้งไว้)
 
-To learn more about Next.js, take a look at the following resources:
+4. เมื่อมี request เข้ามา จะเห็น `method`, `headers`, `x-api-key`, และ `body` ใน console ของ `npm run dev`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## เข้าหน้าเว็บ
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+ตั้งค่าใน `.env.local` แล้ว restart `npm run dev`:
 
-## Deploy on Vercel
+```
+AUTH_USER=admin
+AUTH_PASSWORD=your-password
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+ต้องล็อกอินก่อนเข้าแดชบอร์ด ตั้งค่า และหน้ารายละเอียดไลน์  
+Push จาก iXacs (`/` หรือ `/api/push`) ไม่ต้องล็อกอิน ยังใช้ `x-api-key` ตามเดิม
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## API key (ไม่บังคับ)
+
+สร้างไฟล์ `.env.local` ถ้าต้องการให้ปฏิเสธ key ที่ไม่ตรง:
+
+``` 
+PUSH_API_KEY=your-secret-key
+```
+
+ถ้าไม่ตั้งค่านี้ ทุก request จะถูกรับและ log ทั้งหมด
+
+## ส่งสถานะกลับไป iXacs
+
+เพิ่ม iXacs connection และเข้าสู่ระบบจากหน้า `/settings` ระบบจะเก็บ session ไว้กับ connection และเข้าสู่ระบบใหม่ให้อัตโนมัติเมื่อ session หมดอายุ จากนั้นส่ง `productionLineUuid` + `andonStatusStyleUuid` ไปที่ `/ct-monitor/api/ctMonitor/regist`

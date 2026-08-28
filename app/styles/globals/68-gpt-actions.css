@@ -1,0 +1,221 @@
+.gpt-page {
+  max-width: 960px;
+}
+
+.gpt-badge {
+  margin-left: 8px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.gpt-copy-row {
+  margin-top: 20px;
+}
+
+.gpt-copy-row .console-label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.gpt-origin-field {
+  margin-top: 0;
+}
+
+.gpt-origin-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  outline: none;
+}
+
+.gpt-origin-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.gpt-key-banner {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, #d89b45 42%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, #d89b45 8%, transparent);
+}
+
+.gpt-key-banner > p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.gpt-key-banner .gpt-copy-row {
+  margin-top: 0;
+}
+
+.gpt-key-mask {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+}
+
+.gpt-key-mask code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.gpt-key-mask span {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.gpt-company-list {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.gpt-company {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 8px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.gpt-company:hover {
+  background: var(--bg-hover);
+}
+
+.gpt-company input {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--text-primary);
+}
+
+.gpt-company span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.gpt-company strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.gpt-company code {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-overflow: ellipsis;
+}
+
+.gpt-empty {
+  margin: 14px 8px;
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+
+.gpt-section-actions {
+  margin-top: 16px;
+}
+
+.gpt-steps {
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.gpt-steps li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gpt-steps li > span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.gpt-steps p {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.gpt-prompt {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+}
+
+.gpt-prompt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gpt-prompt-head strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.gpt-prompt > p {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.gpt-policy-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.gpt-policy-link:hover {
+  color: var(--text-primary);
+}
+
+@media (max-width: 640px) {
+  .console-section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gpt-prompt-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

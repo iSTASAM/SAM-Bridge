@@ -1,0 +1,122 @@
+.lw-page {
+  max-width: 720px;
+}
+
+.lw-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lw-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.lw-title-row .console-title {
+  margin: 0;
+}
+
+.lw-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  background: var(--bg-subtle);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.lw-badge.is-ready {
+  color: color-mix(in srgb, #1a7f4b 80%, var(--text-primary));
+  border-color: color-mix(in srgb, #1a7f4b 28%, var(--border));
+  background: color-mix(in srgb, #1a7f4b 10%, var(--bg));
+}
+
+.lw-panel {
+  display: grid;
+  gap: 20px;
+  margin-top: 24px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-elevated);
+}
+
+.lw-skel {
+  display: block;
+  height: 40px;
+  width: 55%;
+}
+
+.lw-skel.is-wide {
+  width: 100%;
+}
+
+.lw-callback {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.lw-callback-label {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.lw-callback-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.lw-message {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.lw-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .lw-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lw-callback {
+    flex-wrap: wrap;
+  }
+
+  .lw-callback-url {
+    flex-basis: 100%;
+    white-space: normal;
+    word-break: break-all;
+  }
+}
