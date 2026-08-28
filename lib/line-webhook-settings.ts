@@ -24,8 +24,18 @@ type DbRow = {
 
 const FILE = path.join(process.cwd(), "data", "line-webhook-settings.json");
 
+let secretCache: { value: string; expiresAt: number } | null = null;
+
 function strip(value?: string) {
   return value?.trim().replace(/^["']|["']$/g, "") || "";
+}
+
+function rememberSecret(value: string) {
+  if (!value) {
+    secretCache = null;
+    return;
+  }
+  secretCache = { value, expiresAt: Date.now() + 60_000 };
 }
 
 function envPublicUrl() {
@@ -108,11 +118,12 @@ async function writeSupabaseSettings(value: LineWebhookSettings) {
 
 function mergeSettings(stored: LineWebhookSettings | null): LineWebhookSettings | null {
   const env = fromEnv();
+  // Stored (Supabase/UI) wins over env so a renewed Messaging API secret is used immediately.
   const merged: LineWebhookSettings = {
-    publicUrl: env.publicUrl || stored?.publicUrl || "",
-    channelSecret: env.channelSecret || stored?.channelSecret || "",
-    liffId: env.liffId || stored?.liffId || "",
-    lineLoginChannelId: env.lineLoginChannelId || stored?.lineLoginChannelId || "",
+    publicUrl: stored?.publicUrl || env.publicUrl || "",
+    channelSecret: stored?.channelSecret || env.channelSecret || "",
+    liffId: stored?.liffId || env.liffId || "",
+    lineLoginChannelId: stored?.lineLoginChannelId || env.lineLoginChannelId || "",
     updatedAt: stored?.updatedAt || "",
   };
   if (!merged.publicUrl && !merged.channelSecret && !merged.liffId && !merged.lineLoginChannelId) {
@@ -121,35 +132,38 @@ function mergeSettings(stored: LineWebhookSettings | null): LineWebhookSettings 
   return merged;
 }
 
-/** Sync/env-only path for LINE webhook — must stay under LINE's timeout. */
+/** Prefer Supabase (settings UI), then env, then local file. Cached for LINE timeout. */
 export function getLineChannelSecretFast(): string {
+  if (secretCache && secretCache.expiresAt > Date.now()) return secretCache.value;
   const envSecret = strip(process.env.LINE_CHANNEL_SECRET);
   if (envSecret) return envSecret;
   return readFileSettings()?.channelSecret ?? "";
 }
 
 export async function getLineChannelSecret(): Promise<string> {
-  const fast = getLineChannelSecretFast();
-  if (fast) return fast;
-  if (!supabaseConfigured()) return "";
-  try {
-    const stored = await Promise.race([
-      readSupabaseSettings(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 800)),
-    ]);
-    return stored?.channelSecret ?? "";
-  } catch {
-    return "";
+  if (secretCache && secretCache.expiresAt > Date.now()) return secretCache.value;
+
+  if (supabaseConfigured()) {
+    try {
+      const stored = await Promise.race([
+        readSupabaseSettings(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 700)),
+      ]);
+      if (stored?.channelSecret) {
+        rememberSecret(stored.channelSecret);
+        return stored.channelSecret;
+      }
+    } catch {
+      // fall through to env
+    }
   }
+
+  const fallback = getLineChannelSecretFast();
+  if (fallback) rememberSecret(fallback);
+  return fallback;
 }
 
 export async function getLineWebhookSettings(): Promise<LineWebhookSettings | null> {
-  const env = fromEnv();
-  // Prefer env for speed when Messaging credentials are already deployed.
-  if (env.channelSecret && env.liffId && env.lineLoginChannelId) {
-    return mergeSettings(null);
-  }
-
   let stored: LineWebhookSettings | null = null;
   if (supabaseConfigured()) {
     try {
@@ -160,7 +174,9 @@ export async function getLineWebhookSettings(): Promise<LineWebhookSettings | nu
   } else {
     stored = readFileSettings();
   }
-  return mergeSettings(stored);
+  const merged = mergeSettings(stored);
+  if (merged?.channelSecret) rememberSecret(merged.channelSecret);
+  return merged;
 }
 
 export async function getLineWebhookSettingsMeta() {
@@ -221,6 +237,7 @@ export async function saveLineWebhookSettings(
   };
 
   await writeSupabaseSettings(value);
+  rememberSecret(value.channelSecret);
   // Keep a local mirror for offline/dev only.
   try {
     writeFileSettings(value);
