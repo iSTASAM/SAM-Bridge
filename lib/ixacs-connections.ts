@@ -8,6 +8,13 @@ import {
   parseLineUuids,
 } from "@/lib/ixacs-curl";
 import { normalizeLoginUrl, type IxacsCustomerOption } from "@/lib/ixacs-login";
+import {
+  connectionSecretsConfigured,
+  decryptCustomerOptions,
+  decryptSecret,
+  encryptCustomerOptions,
+  encryptSecret,
+} from "@/lib/connection-secrets";
 import { getSupabaseAdmin, supabaseConfigured } from "@/lib/supabase-admin";
 
 export type IxacsConnection = {
@@ -77,7 +84,14 @@ function normalizeCustomers(value: unknown): IxacsCustomerOption[] {
   return items;
 }
 
+function requireSecretKey() {
+  if (!connectionSecretsConfigured()) {
+    throw new Error("CONNECTIONS_ENCRYPTION_KEY_MISSING");
+  }
+}
+
 function rowToConnection(row: DbRow): IxacsConnection {
+  requireSecretKey();
   return {
     id: row.id,
     name: row.name,
@@ -85,10 +99,10 @@ function rowToConnection(row: DbRow): IxacsConnection {
     loginUrl:
       normalizeLoginUrl(row.login_url ?? "") ||
       `${row.base_url.replace(/\/+$/, "")}/gateway/web/login`,
-    customerId: row.customer_id ?? "",
-    customers: normalizeCustomers(row.customers),
-    loginId: row.login_id ?? "",
-    password: row.password ?? "",
+    customerId: decryptSecret(row.customer_id ?? ""),
+    customers: decryptCustomerOptions(normalizeCustomers(row.customers)),
+    loginId: decryptSecret(row.login_id ?? ""),
+    password: decryptSecret(row.password ?? ""),
     basicAuth: row.basic_auth ?? "",
     session: row.session ?? "",
     lineUuids: Array.isArray(row.line_uuids) ? row.line_uuids : [],
@@ -103,15 +117,16 @@ function connectionToRow(connection: IxacsConnection, isActive: boolean): Omit<D
   created_at?: string;
   updated_at?: string;
 } {
+  requireSecretKey();
   return {
     id: connection.id,
     name: connection.name,
     base_url: connection.baseUrl,
     login_url: connection.loginUrl,
-    customer_id: connection.customerId,
-    customers: connection.customers,
-    login_id: connection.loginId,
-    password: connection.password,
+    customer_id: encryptSecret(connection.customerId),
+    customers: encryptCustomerOptions(connection.customers),
+    login_id: encryptSecret(connection.loginId),
+    password: encryptSecret(connection.password),
     basic_auth: connection.basicAuth,
     session: connection.session,
     line_uuids: connection.lineUuids,
@@ -128,19 +143,24 @@ function hydrateFromFile() {
   try {
     const parsed = JSON.parse(readFileSync(STATE_FILE, "utf8")) as PersistedConnections;
     connections = new Map(
-      Object.entries(parsed.connections ?? {}).map(([id, connection]) => [
-        id,
-        {
-          ...connection,
-          loginUrl:
-            normalizeLoginUrl(connection.loginUrl ?? "") ||
-            `${connection.baseUrl.replace(/\/+$/, "")}/gateway/web/login`,
-          customerId: connection.customerId ?? "",
-          customers: normalizeCustomers(connection.customers),
-          loginId: connection.loginId ?? "",
-          password: connection.password ?? "",
-        },
-      ]),
+      Object.entries(parsed.connections ?? {}).map(([id, connection]) => {
+        const customers = normalizeCustomers(connection.customers);
+        return [
+          id,
+          {
+            ...connection,
+            loginUrl:
+              normalizeLoginUrl(connection.loginUrl ?? "") ||
+              `${connection.baseUrl.replace(/\/+$/, "")}/gateway/web/login`,
+            customerId: decryptSecret(connection.customerId ?? ""),
+            customers: connectionSecretsConfigured()
+              ? decryptCustomerOptions(customers)
+              : customers,
+            loginId: decryptSecret(connection.loginId ?? ""),
+            password: decryptSecret(connection.password ?? ""),
+          },
+        ];
+      }),
     );
     activeId = parsed.activeId ?? [...connections.keys()][0] ?? null;
     if (activeId && !connections.has(activeId)) {
@@ -155,6 +175,7 @@ function hydrateFromFile() {
 async function hydrateFromSupabase() {
   const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+  requireSecretKey();
   const { data, error } = await supabase.from("ixacs_connections").select("*").order("created_at", { ascending: true });
   if (error) throw new Error(`SUPABASE_LOAD_FAILED: ${error.message}`);
   connections = new Map((data as DbRow[] | null ?? []).map((row) => [row.id, rowToConnection(row)]));
@@ -180,9 +201,23 @@ async function ensureHydrated() {
 
 function persistFile() {
   mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+  const encryptedEntries = Object.fromEntries(
+    [...connections.entries()].map(([id, connection]) => [
+      id,
+      connectionSecretsConfigured()
+        ? {
+            ...connection,
+            customerId: encryptSecret(connection.customerId),
+            customers: encryptCustomerOptions(connection.customers),
+            loginId: encryptSecret(connection.loginId),
+            password: encryptSecret(connection.password),
+          }
+        : connection,
+    ]),
+  );
   const payload: PersistedConnections = {
     activeId,
-    connections: Object.fromEntries(connections),
+    connections: encryptedEntries,
   };
   writeFileSync(STATE_FILE, JSON.stringify(payload, null, 2), "utf8");
 }

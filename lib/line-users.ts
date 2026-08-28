@@ -18,8 +18,12 @@ function readUsers(): Record<string, StoredLineUser> {
   try { return (JSON.parse(readFileSync(FILE, "utf8")) as { users?: Record<string, StoredLineUser> }).users ?? {}; } catch { return {}; }
 }
 function writeUsers(users: Record<string, StoredLineUser>) {
-  mkdirSync(path.dirname(FILE), { recursive: true });
-  writeFileSync(FILE, JSON.stringify({ users }, null, 2), { encoding: "utf8", mode: 0o600 });
+  try {
+    mkdirSync(path.dirname(FILE), { recursive: true });
+    writeFileSync(FILE, JSON.stringify({ users }, null, 2), { encoding: "utf8", mode: 0o600 });
+  } catch {
+    // Vercel/ephemeral FS: skip durable write so webhook verify can still return 200.
+  }
 }
 function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");

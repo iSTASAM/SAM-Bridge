@@ -5,7 +5,7 @@ import { getLineWebhookSettings } from "@/lib/line-webhook-settings";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { idToken?: unknown; customerCompanyId?: unknown; loginId?: unknown; password?: unknown; inClient?: unknown };
-  const settings = getLineWebhookSettings();
+  const settings = await getLineWebhookSettings();
   if (!settings?.lineLoginChannelId || !settings.liffId) return NextResponse.json({ error: "LINE_LOGIN_NOT_CONFIGURED" }, { status: 503 });
   if (body.inClient !== true) return NextResponse.json({ error: "LINE_CLIENT_REQUIRED" }, { status: 403 });
   const idToken = typeof body.idToken === "string" ? body.idToken : "";

@@ -11,8 +11,9 @@ create table if not exists public.ixacs_connections (
   customer_id text not null default '',
   customers jsonb not null default '[]'::jsonb,
   login_id text not null default '',
-  -- Credential used by the server to call iXacs. Keep access server-side only.
-  password text not null default '',
+  -- Credential columns (customer_id, login_id, password, and customers[].id)
+-- are encrypted at the application layer (AES-256-GCM) before insert/update.
+-- Matching for /login and /line/login happens after decrypt in the app.
   basic_auth text not null default '',
   session text not null default '',
   line_uuids text[] not null default '{}',

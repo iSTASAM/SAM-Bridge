@@ -4,11 +4,11 @@ import { getLineWebhookSettings, saveLineWebhookSettings } from "@/lib/line-webh
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const settings = getLineWebhookSettings();
+  const settings = await getLineWebhookSettings();
   return NextResponse.json({
-    configured: Boolean(settings),
+    configured: Boolean(settings?.channelSecret || settings?.publicUrl),
     publicUrl: settings?.publicUrl ?? "",
-    callbackUrl: settings ? `${settings.publicUrl}/api/line/webhook` : "",
+    callbackUrl: settings?.publicUrl ? `${settings.publicUrl}/api/line/webhook` : "",
     channelSecretConfigured: Boolean(settings?.channelSecret),
     liffId: settings?.liffId ?? "",
     lineLoginChannelId: settings?.lineLoginChannelId ?? "",
@@ -17,16 +17,32 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { publicUrl?: unknown; channelSecret?: unknown; liffId?: unknown; lineLoginChannelId?: unknown };
+  const body = (await request.json().catch(() => ({}))) as {
+    publicUrl?: unknown;
+    channelSecret?: unknown;
+    liffId?: unknown;
+    lineLoginChannelId?: unknown;
+  };
   try {
-    const saved = saveLineWebhookSettings(
+    const saved = await saveLineWebhookSettings(
       typeof body.publicUrl === "string" ? body.publicUrl : "",
       typeof body.channelSecret === "string" ? body.channelSecret : "",
       typeof body.liffId === "string" ? body.liffId : "",
       typeof body.lineLoginChannelId === "string" ? body.lineLoginChannelId : "",
     );
-    return NextResponse.json({ configured: true, publicUrl: saved.publicUrl, callbackUrl: `${saved.publicUrl}/api/line/webhook`, channelSecretConfigured: true, liffId: saved.liffId, lineLoginChannelId: saved.lineLoginChannelId, updatedAt: saved.updatedAt });
+    return NextResponse.json({
+      configured: true,
+      publicUrl: saved.publicUrl,
+      callbackUrl: `${saved.publicUrl}/api/line/webhook`,
+      channelSecretConfigured: true,
+      liffId: saved.liffId,
+      lineLoginChannelId: saved.lineLoginChannelId,
+      updatedAt: saved.updatedAt,
+    });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "SAVE_FAILED" }, { status: 400 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "SAVE_FAILED" },
+      { status: 400 },
+    );
   }
 }
