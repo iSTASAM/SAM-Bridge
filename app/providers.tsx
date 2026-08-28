@@ -9,7 +9,7 @@ import { ThemeProvider } from "./theme-context";
 function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { hidden, hide, show } = useSidebarHiddenState();
-  if (pathname === "/login" || pathname === "/admin/login" || pathname.startsWith("/line/")) return children;
+  if (pathname === "/login" || pathname === "/admin/login" || pathname === "/line" || pathname.startsWith("/line/")) return children;
 
   return (
     <div className={`app-shell ${hidden ? "is-sidebar-hidden" : ""}`}>

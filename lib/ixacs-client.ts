@@ -32,6 +32,9 @@ export type IxacsLineDiscoveryResult = {
 export type IxacsStatus = {
   uuid: string;
   name: string;
+  nameTh: string;
+  nameEn: string;
+  nameJa: string;
   backgroundColor: string | null;
   textColor: string | null;
   blinking: boolean;
@@ -56,7 +59,7 @@ const discoveryCache = new Map<
   string,
   { expiresAt: number; result: IxacsLineDiscoveryResult }
 >();
-const DISCOVERY_CACHE_VERSION = "statuses-by-line-v1";
+const DISCOVERY_CACHE_VERSION = "statuses-by-line-v3-localized";
 
 export function connectionAsTarget(connection: IxacsConnection): IxacsTarget {
   let refreshing: Promise<string> | null = null;
@@ -244,17 +247,145 @@ function normalizeStatusName(raw: string, uuid: string) {
   return name;
 }
 
+function unescapeJsonString(value: string) {
+  try {
+    return JSON.parse(`"${value}"`) as string;
+  } catch {
+    return value;
+  }
+}
+
+function readQuotedField(block: string, field: string) {
+  const match = block.match(new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, "i"));
+  return match ? unescapeJsonString(match[1]).trim() : "";
+}
+
+/** Slice the JSON-ish object that owns `"uuid":"<id>"` at uuidIndex. */
+function sliceObjectAround(html: string, uuidIndex: number) {
+  let start = uuidIndex;
+  while (start > 0 && html[start] !== "{") start -= 1;
+  if (html[start] !== "{") return "";
+  let depth = 0;
+  for (let index = start; index < html.length && index - start < 8000; index += 1) {
+    const char = html[index];
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return html.slice(start, index + 1);
+    }
+  }
+  return html.slice(start, Math.min(html.length, start + 4000));
+}
+
+/**
+ * Prefer embedded iXacs style objects (dispStringJa / dispStringEn / dispString3rd).
+ * Falls back to nearby field windows when objects are not strict JSON.
+ */
+function parseLocalizedStatusNames(html: string) {
+  const map = new Map<string, { nameTh: string; nameEn: string; nameJa: string }>();
+
+  const remember = (uuid: string, nameTh: string, nameEn: string, nameJa: string) => {
+    if (!uuid || (!nameTh && !nameEn && !nameJa)) return;
+    const previous = map.get(uuid);
+    map.set(uuid, {
+      nameTh: nameTh || previous?.nameTh || nameEn || nameJa,
+      nameEn: nameEn || previous?.nameEn || nameTh || nameJa,
+      nameJa: nameJa || previous?.nameJa || nameEn || nameTh,
+    });
+  };
+
+  for (const match of html.matchAll(/"uuid"\s*:\s*"([\da-f-]{36})"/gi)) {
+    const uuid = match[1];
+    const block = sliceObjectAround(html, match.index ?? 0);
+    remember(
+      uuid,
+      readQuotedField(block, "dispString3rd") || readQuotedField(block, "name3rd"),
+      readQuotedField(block, "dispStringEn") || readQuotedField(block, "nameEn"),
+      readQuotedField(block, "dispStringJa") || readQuotedField(block, "nameJa"),
+    );
+  }
+
+  // Loose nearby-window pass for templates that split fields across markup.
+  for (const match of html.matchAll(/["']([\da-f-]{36})["']/gi)) {
+    const uuid = match[1];
+    if (map.has(uuid) && map.get(uuid)!.nameTh !== map.get(uuid)!.nameEn) continue;
+    const start = Math.max(0, (match.index ?? 0) - 240);
+    const end = Math.min(html.length, (match.index ?? 0) + 2400);
+    const window = html.slice(start, end);
+    const nameJa = readQuotedField(window, "dispStringJa") || readQuotedField(window, "nameJa");
+    const nameEn = readQuotedField(window, "dispStringEn") || readQuotedField(window, "nameEn");
+    const nameTh = readQuotedField(window, "dispString3rd") || readQuotedField(window, "name3rd");
+    if (nameJa || nameEn || nameTh) remember(uuid, nameTh, nameEn, nameJa);
+  }
+
+  // data-* attributes on status elements.
+  for (const match of html.matchAll(
+    /<[^>]*\bcls_([\da-f-]{36})\b[^>]*>/gi,
+  )) {
+    const uuid = match[1];
+    const tag = match[0];
+    const attr = (name: string) =>
+      tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, "i"))?.[1]?.trim() ?? "";
+    const nameJa = attr("data-disp-string-ja") || attr("data-name-ja") || attr("data-nameja");
+    const nameEn = attr("data-disp-string-en") || attr("data-name-en") || attr("data-nameen");
+    const nameTh =
+      attr("data-disp-string-3rd") ||
+      attr("data-disp-string-th") ||
+      attr("data-name-3rd") ||
+      attr("data-name-th");
+    if (nameJa || nameEn || nameTh) remember(uuid, nameTh, nameEn, nameJa);
+  }
+
+  // Hidden inputs inside andon_reg modals: dispStringJa_row-col-idx
+  for (const match of html.matchAll(
+    /id=["']dispString(Ja|En|3rd)_(\d+-\d+-\d+)["'][^>]*\bvalue=["']([^"']*)["']/gi,
+  )) {
+    const kind = match[1].toLowerCase();
+    const suffix = match[2];
+    const value = decodeHtmlText(match[3]).trim();
+    if (!value) continue;
+    const uuid = html.match(
+      new RegExp(
+        `id=["']andonStatusStyleUuid_${suffix}["'][^>]*\\bvalue=["']([\\da-f-]{36})["']`,
+        "i",
+      ),
+    )?.[1];
+    if (!uuid) continue;
+    const previous = map.get(uuid) ?? { nameTh: "", nameEn: "", nameJa: "" };
+    remember(
+      uuid,
+      kind === "3rd" ? value : previous.nameTh,
+      kind === "en" ? value : previous.nameEn,
+      kind === "ja" ? value : previous.nameJa,
+    );
+  }
+
+  return map;
+}
+
 function statusFromParts(
   uuid: string,
   rawName: string,
   colors: Map<string, StatusColors>,
+  localized?: Map<string, { nameTh: string; nameEn: string; nameJa: string }>,
 ): IxacsStatus | null {
-  const name = normalizeStatusName(rawName, uuid);
+  const localizedNames = localized?.get(uuid);
+  const fallback = normalizeStatusName(rawName, uuid);
+  if (!fallback && !localizedNames) return null;
+
+  const nameTh = (localizedNames?.nameTh || fallback || "").trim();
+  const nameEn = (localizedNames?.nameEn || fallback || "").trim();
+  const nameJa = (localizedNames?.nameJa || fallback || "").trim();
+  const name = nameTh || nameEn || nameJa;
   if (!name) return null;
+
   const statusColors = colors.get(uuid);
   return {
     uuid,
     name,
+    nameTh,
+    nameEn,
+    nameJa,
     backgroundColor: statusColors?.backgroundColor ?? null,
     textColor: statusColors?.textColor ?? null,
     blinking: statusColors?.blinking ?? false,
@@ -265,11 +396,12 @@ function statusFromParts(
 
 function parseStatuses(html: string): IxacsStatus[] {
   const colors = parseStatusColors(html);
+  const localized = parseLocalizedStatusNames(html);
   const statuses = new Map<string, IxacsStatus>();
   for (const match of html.matchAll(
     /<div\b[^>]*\bid=["']st_([\da-f-]+)["'][^>]*>([\s\S]*?)<\/div>/gi,
   )) {
-    const status = statusFromParts(match[1], match[2], colors);
+    const status = statusFromParts(match[1], match[2], colors, localized);
     if (status) statuses.set(status.uuid, status);
   }
   return [...statuses.values()];
@@ -278,6 +410,7 @@ function parseStatuses(html: string): IxacsStatus[] {
 /** Per-line selectable statuses from andon_reg modals on the realtime monitor page. */
 function parseStatusesByLine(html: string): Record<string, IxacsStatus[]> {
   const colors = parseStatusColors(html);
+  const localized = parseLocalizedStatusNames(html);
   const catalogNames = new Map<string, string>();
   for (const match of html.matchAll(
     /<div\b[^>]*\bid=["']st_([\da-f-]+)["'][^>]*>([\s\S]*?)<\/div>/gi,
@@ -312,7 +445,12 @@ function parseStatusesByLine(html: string): Record<string, IxacsStatus[]> {
           "i",
         ),
       )?.[1];
-      const status = statusFromParts(uuid, named ?? catalogNames.get(uuid) ?? uuid, colors);
+      const status = statusFromParts(
+        uuid,
+        named ?? catalogNames.get(uuid) ?? uuid,
+        colors,
+        localized,
+      );
       if (status) statuses.set(status.uuid, status);
     }
 

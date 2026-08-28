@@ -38,7 +38,7 @@ export function LineLoginForm({ copy, disabled, pending, error, onSubmit }: Line
     >
       <div className="login-field">
         <label htmlFor={companyId}>{copy.customerCompanyId}</label>
-        <input id={companyId} className="login-input" name="customerCompanyId" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="next" placeholder={copy.customerCompanyIdPlaceholder} value={customerCompanyId} onChange={(event) => setCustomerCompanyId(event.target.value)} disabled={disabled || pending} />
+        <input id={companyId} className="login-input" name="customerCompanyId" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="next" value={customerCompanyId} onChange={(event) => setCustomerCompanyId(event.target.value)} disabled={disabled || pending} />
       </div>
 
       <div className="login-field">
@@ -54,7 +54,6 @@ export function LineLoginForm({ copy, disabled, pending, error, onSubmit }: Line
           spellCheck={false}
           inputMode="text"
           enterKeyHint="next"
-          placeholder={copy.loginIdPlaceholder}
           value={loginId}
           onChange={(event) => setLoginId(event.target.value)}
           disabled={disabled || pending}
@@ -72,7 +71,6 @@ export function LineLoginForm({ copy, disabled, pending, error, onSubmit }: Line
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
             enterKeyHint="done"
-            placeholder={copy.passwordPlaceholder}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             disabled={disabled || pending}
@@ -107,8 +105,6 @@ export function LineLoginForm({ copy, disabled, pending, error, onSubmit }: Line
           copy.submit
         )}
       </button>
-
-      <p className="line-login-help">{copy.help}</p>
     </form>
   );
 }

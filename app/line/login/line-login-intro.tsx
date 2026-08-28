@@ -1,21 +1,11 @@
-import { FiLink2 } from "react-icons/fi";
-import type { LineLoginCopy } from "./line-login-copy";
+import { IxacsLogo } from "../ixacs-logo";
 
-export function LineLoginIntro({ copy }: { copy: LineLoginCopy }) {
+export function LineLoginIntro() {
   return (
-    <section className="line-login-intro" aria-labelledby="line-login-title">
-      <div className="line-login-connect" aria-hidden>
-        <span className="line-login-connect-node">{copy.bridgeLabel}</span>
-        <span className="line-login-connect-link">
-          <FiLink2 size={16} />
-        </span>
-        <span className="line-login-connect-node is-line">{copy.lineBadge}</span>
+    <section className="line-login-intro" aria-label="iXacs">
+      <div className="line-login-brand-mark">
+        <IxacsLogo width={168} className="line-login-ixacs-logo" />
       </div>
-
-      <h1 id="line-login-title" className="line-login-title">
-        {copy.title}
-      </h1>
-      <p className="line-login-lead">{copy.lead}</p>
     </section>
   );
 }

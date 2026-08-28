@@ -22,6 +22,7 @@ function isPublicPath(pathname: string) {
     pathname === "/line/login" ||
     pathname === "/api/line/config" ||
     pathname === "/api/line/auth/login" ||
+    pathname === "/api/line/auth/logout" ||
     pathname === "/api/line/webhook" ||
     pathname === "/api/gpt-actions/openapi.json" ||
     pathname === "/gpt-actions/privacy"
@@ -75,6 +76,11 @@ function rewriteToPush(request: NextRequest) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Public static assets must bypass auth (e.g. /ixacs-logo.png used on /line/login).
+  if (/\.(?:avif|css|gif|ico|jpeg|jpg|js|map|png|svg|txt|webp|woff2?)$/i.test(pathname)) {
+    return NextResponse.next();
+  }
+
   if (isPushWebhook(request)) {
     if (pathname.startsWith("/api/")) return NextResponse.next();
     return rewriteToPush(request);
@@ -123,5 +129,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico).*)"],
+  matcher: [
+    "/",
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|txt|woff2?)$).*)",
+  ],
 };

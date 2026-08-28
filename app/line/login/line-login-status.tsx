@@ -1,4 +1,5 @@
-import { FiAlertCircle, FiCheckCircle, FiLink2, FiLoader } from "react-icons/fi";
+import { FiAlertCircle, FiCheckCircle, FiLink2 } from "react-icons/fi";
+import { IxacsLogo } from "../ixacs-logo";
 import type { LineLoginCopy, LineLoginUiState } from "./line-login-copy";
 
 type LineLoginStatusProps = {
@@ -10,12 +11,10 @@ type LineLoginStatusProps = {
 export function LineLoginStatus({ copy, state, onPrimaryAction }: LineLoginStatusProps) {
   if (state === "loading") {
     return (
-      <section className="line-login-status" aria-live="polite" aria-busy="true">
-        <div className="line-login-status-icon is-loading" aria-hidden>
-          <FiLoader size={22} />
+      <section className="line-login-status is-loading-only" aria-live="polite" aria-busy="true" aria-label={copy.loadingTitle}>
+        <div className="line-login-status-logo is-loading" aria-hidden>
+          <IxacsLogo width={168} className="line-login-ixacs-logo" />
         </div>
-        <h1 className="line-login-status-title">{copy.loadingTitle}</h1>
-        <p className="line-login-status-lead">{copy.loadingLead}</p>
       </section>
     );
   }
