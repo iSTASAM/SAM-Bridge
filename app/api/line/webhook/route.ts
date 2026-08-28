@@ -4,11 +4,18 @@ import { getLineWebhookSettings } from "@/lib/line-webhook-settings";
 import { markLineFriendship } from "@/lib/line-users";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-function signatureIsValid(body: string, signature: string, secret: string) {
-  if (!signature || !secret) return false;
-  const expected = createHmac("sha256", secret).update(body).digest("base64");
-  const actualBuffer = Buffer.from(signature);
+function normalizeSecret(value: string) {
+  return value.trim().replace(/^["']|["']$/g, "");
+}
+
+function signatureIsValid(body: Buffer, signature: string, secret: string) {
+  const normalizedSecret = normalizeSecret(secret);
+  const normalizedSignature = signature.trim();
+  if (!normalizedSignature || !normalizedSecret) return false;
+  const expected = createHmac("sha256", normalizedSecret).update(body).digest("base64");
+  const actualBuffer = Buffer.from(normalizedSignature);
   const expectedBuffer = Buffer.from(expected);
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
@@ -28,14 +35,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "LINE_WEBHOOK_NOT_CONFIGURED" }, { status: 503 });
   }
 
-  const body = await request.text();
+  const body = Buffer.from(await request.arrayBuffer());
   const signature = request.headers.get("x-line-signature") ?? "";
   if (!signatureIsValid(body, signature, settings.channelSecret)) {
     return NextResponse.json({ error: "INVALID_LINE_SIGNATURE" }, { status: 401 });
   }
 
   try {
-    const payload = JSON.parse(body || "{}") as {
+    const payload = JSON.parse(body.toString("utf8") || "{}") as {
       events?: Array<{ type?: string; source?: { userId?: string } }>;
     };
     for (const event of payload.events ?? []) {

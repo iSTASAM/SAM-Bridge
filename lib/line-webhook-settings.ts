@@ -39,11 +39,12 @@ function envPublicUrl() {
 }
 
 function fromEnv(): Partial<LineWebhookSettings> {
+  const strip = (value?: string) => (value?.trim().replace(/^["']|["']$/g, "") || "");
   return {
     publicUrl: envPublicUrl(),
-    channelSecret: process.env.LINE_CHANNEL_SECRET?.trim() || "",
-    liffId: process.env.LINE_LIFF_ID?.trim() || "",
-    lineLoginChannelId: process.env.LINE_LOGIN_CHANNEL_ID?.trim() || "",
+    channelSecret: strip(process.env.LINE_CHANNEL_SECRET),
+    liffId: strip(process.env.LINE_LIFF_ID),
+    lineLoginChannelId: strip(process.env.LINE_LOGIN_CHANNEL_ID),
   };
 }
 
