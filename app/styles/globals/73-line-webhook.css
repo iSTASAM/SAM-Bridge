@@ -40,6 +40,31 @@
   background: color-mix(in srgb, #1a7f4b 10%, var(--bg));
 }
 
+.lw-hint {
+  margin: 10px 0 0;
+  max-width: 46ch;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.lw-storage {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #1a7f4b 24%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, #1a7f4b 8%, var(--bg));
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.lw-panel .machine-help {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
 .lw-panel {
   display: grid;
   gap: 20px;

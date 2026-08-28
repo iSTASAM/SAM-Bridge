@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { getLineWebhookSettings, saveLineWebhookSettings } from "@/lib/line-webhook-settings";
+import {
+  getLineWebhookSettingsMeta,
+  saveLineWebhookSettings,
+} from "@/lib/line-webhook-settings";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const settings = await getLineWebhookSettings();
+  const { settings, storage, supabaseConfigured } = await getLineWebhookSettingsMeta();
   return NextResponse.json({
     configured: Boolean(settings?.channelSecret || settings?.publicUrl),
     publicUrl: settings?.publicUrl ?? "",
@@ -13,6 +16,8 @@ export async function GET() {
     liffId: settings?.liffId ?? "",
     lineLoginChannelId: settings?.lineLoginChannelId ?? "",
     updatedAt: settings?.updatedAt ?? null,
+    storage,
+    supabaseConfigured,
   });
 }
 
@@ -38,6 +43,8 @@ export async function POST(request: Request) {
       liffId: saved.liffId,
       lineLoginChannelId: saved.lineLoginChannelId,
       updatedAt: saved.updatedAt,
+      storage: "supabase",
+      supabaseConfigured: true,
     });
   } catch (error) {
     return NextResponse.json(

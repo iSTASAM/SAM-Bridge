@@ -14,13 +14,39 @@ type Settings = {
   liffId: string;
   lineLoginChannelId: string;
   updatedAt: string | null;
+  storage?: "env" | "supabase" | "file" | "mixed";
+  supabaseConfigured?: boolean;
 };
+
+function mapSaveError(
+  error: string | undefined,
+  copy: (typeof LINE_WEBHOOK_COPY)[keyof typeof LINE_WEBHOOK_COPY],
+) {
+  switch (error) {
+    case "PUBLIC_HTTPS_URL_REQUIRED":
+      return copy.errPublicUrl;
+    case "CHANNEL_SECRET_REQUIRED":
+      return copy.errSecret;
+    case "LIFF_ID_REQUIRED":
+    case "INVALID_LIFF_ID":
+      return copy.errLiff;
+    case "LINE_LOGIN_CHANNEL_ID_REQUIRED":
+    case "INVALID_LINE_LOGIN_CHANNEL_ID":
+      return copy.errLoginChannel;
+    case "SUPABASE_NOT_CONFIGURED":
+      return copy.errSupabase;
+    case "CONNECTIONS_ENCRYPTION_KEY_MISSING":
+      return copy.errEncrypt;
+    default:
+      return error || copy.errSave;
+  }
+}
 
 export function LineWebhookSettings() {
   const { locale } = useLocale();
   const copy = LINE_WEBHOOK_COPY[locale];
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [publicUrl, setPublicUrl] = useState("");
+  const [publicUrl, setPublicUrl] = useState("https://sam-bridge.vercel.app");
   const [channelSecret, setChannelSecret] = useState("");
   const [liffId, setLiffId] = useState("");
   const [lineLoginChannelId, setLineLoginChannelId] = useState("");
@@ -33,7 +59,7 @@ export function LineWebhookSettings() {
     const response = await fetch("/api/line/webhook-settings", { cache: "no-store" });
     const data = (await response.json()) as Settings;
     setSettings(data);
-    setPublicUrl(data.publicUrl);
+    setPublicUrl(data.publicUrl || "https://sam-bridge.vercel.app");
     setLiffId(data.liffId);
     setLineLoginChannelId(data.lineLoginChannelId);
     setLoading(false);
@@ -67,13 +93,7 @@ export function LineWebhookSettings() {
       });
       const data = (await response.json().catch(() => ({}))) as Settings & { error?: string };
       if (!response.ok) {
-        setMessage(
-          data.error === "PUBLIC_HTTPS_URL_REQUIRED"
-            ? copy.errPublicUrl
-            : data.error === "CHANNEL_SECRET_REQUIRED"
-              ? copy.errSecret
-              : data.error || copy.errSave,
-        );
+        setMessage(mapSaveError(data.error, copy));
         return;
       }
       setSettings(data);
@@ -87,7 +107,18 @@ export function LineWebhookSettings() {
     }
   }
 
-  const ready = Boolean(settings?.configured && settings.channelSecretConfigured);
+  const ready = Boolean(
+    settings?.channelSecretConfigured && settings.liffId && settings.lineLoginChannelId,
+  );
+
+  const storageLabel =
+    settings?.storage === "supabase"
+      ? copy.storageSupabase
+      : settings?.storage === "env"
+        ? copy.storageEnv
+        : settings?.storage === "mixed"
+          ? copy.storageMixed
+          : copy.storageFile;
 
   return (
     <div className="console-page lw-page">
@@ -105,6 +136,7 @@ export function LineWebhookSettings() {
               </span>
             ) : null}
           </div>
+          <p className="lw-hint">{copy.hint}</p>
         </div>
         <a
           className="btn btn-secondary"
@@ -125,6 +157,14 @@ export function LineWebhookSettings() {
         </div>
       ) : (
         <div className="lw-panel">
+          {!settings?.supabaseConfigured ? (
+            <p className="lw-message" role="alert">
+              {copy.needSupabase}
+            </p>
+          ) : (
+            <p className="lw-storage">{storageLabel}</p>
+          )}
+
           <label className="machine-field">
             <span className="machine-label">{copy.publicUrl}</span>
             <input
@@ -148,16 +188,30 @@ export function LineWebhookSettings() {
               value={channelSecret}
               onChange={(event) => setChannelSecret(event.target.value)}
             />
+            <span className="machine-help">{copy.channelSecretHint}</span>
           </label>
 
           <label className="machine-field">
-            <span className="machine-label">LIFF ID</span>
-            <input className="machine-input" autoComplete="off" placeholder="1234567890-AbCdEfGh" value={liffId} onChange={(event) => setLiffId(event.target.value)} />
+            <span className="machine-label">{copy.liffId}</span>
+            <input
+              className="machine-input"
+              autoComplete="off"
+              placeholder={copy.liffIdPlaceholder}
+              value={liffId}
+              onChange={(event) => setLiffId(event.target.value)}
+            />
           </label>
 
           <label className="machine-field">
-            <span className="machine-label">LINE Login Channel ID</span>
-            <input className="machine-input" inputMode="numeric" autoComplete="off" placeholder="1234567890" value={lineLoginChannelId} onChange={(event) => setLineLoginChannelId(event.target.value)} />
+            <span className="machine-label">{copy.loginChannelId}</span>
+            <input
+              className="machine-input"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder={copy.loginChannelIdPlaceholder}
+              value={lineLoginChannelId}
+              onChange={(event) => setLineLoginChannelId(event.target.value)}
+            />
           </label>
 
           <div className="lw-callback">
@@ -185,7 +239,7 @@ export function LineWebhookSettings() {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={busy}
+              disabled={busy || settings?.supabaseConfigured === false}
               onClick={() => void save()}
             >
               <FiSave size={15} />
