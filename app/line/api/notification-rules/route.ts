@@ -7,7 +7,8 @@ import {
   createLineNotificationRule,
   listLineNotificationRules,
 } from "@/lib/line-notification-rules";
-import { lineLoginStatus } from "@/lib/line-logins";
+import { lineLoginStatus, markLineLoggedIn } from "@/lib/line-logins";
+import { dispatchLineStatusChange } from "@/lib/line-notification-runner";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "LINE_OR_STATUS_NOT_AVAILABLE" }, { status: 400 });
   }
 
+  const currentStatusUuid =
+    typeof body.currentStatusUuid === "string" ? body.currentStatusUuid.trim() : "";
+
   try {
+    await markLineLoggedIn({
+      lineUserId: context.session.lineUserId,
+      connectionId: context.connection.id,
+      customerId: context.session.customerId,
+      loginId: context.session.loginId,
+    });
     const rule = await createLineNotificationRule({
       lineUserId: context.session.lineUserId,
       connectionId: context.connection.id,
@@ -58,11 +68,16 @@ export async function POST(request: Request) {
       statusBackgroundColor: status.backgroundColor,
       durationMinutes: 0,
     });
+    if (currentStatusUuid) {
+      try {
+        await dispatchLineStatusChange(lineUuid, currentStatusUuid, new Date().toISOString(), context.connection.id);
+      } catch (error) {
+        console.warn("LINE notification after saving rule failed:", error);
+      }
+    }
     return NextResponse.json({ ok: true, rule });
   } catch (error) {
-    return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "SAVE_FAILED" },
-      { status: 400 },
-    );
+    const message = error instanceof Error ? error.message : "SAVE_FAILED";
+    return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 }

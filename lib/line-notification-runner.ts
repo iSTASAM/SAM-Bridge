@@ -127,9 +127,7 @@ async function observe(
   observedAt: string,
 ) {
   let sent = 0;
-  const matching = rules.filter(
-    (rule) => rule.enabled && rule.connectionId === connectionId && rule.lineUuid === lineUuid,
-  );
+  const matching = rules.filter((rule) => rule.enabled && rule.lineUuid === lineUuid);
   for (const rule of matching) {
     const state = await rememberLineNotificationObservation(rule, statusUuid, observedAt);
     rule.observedStatusUuid = statusUuid;
@@ -138,18 +136,36 @@ async function observe(
     if (statusUuid !== rule.statusUuid || state.lastNotifiedAt) {
       continue;
     }
-    await notifyRule(rule, observedAt);
-    rule.lastNotifiedAt = observedAt;
-    sent += 1;
+    try {
+      await notifyRule(rule, observedAt);
+      rule.lastNotifiedAt = observedAt;
+      sent += 1;
+    } catch (error) {
+      console.warn("LINE notification send failed:", {
+        ruleId: rule.id,
+        lineUuid: rule.lineUuid,
+        error: error instanceof Error ? error.message : error,
+      });
+    }
   }
   return sent;
+}
+
+export async function dispatchLineStatusChange(
+  lineUuid: string,
+  statusUuid: string | null,
+  observedAt = new Date().toISOString(),
+  connectionId?: string | null,
+) {
+  const rules = (await listLineNotificationRules()).filter((rule) => rule.enabled);
+  return observe(rules, connectionId ?? "", lineUuid, statusUuid, observedAt);
 }
 
 export async function dispatchLineNotificationEvents(events: PushEvent[]) {
   const rules = (await listLineNotificationRules()).filter((rule) => rule.enabled);
   let sent = 0;
   for (const event of events) {
-    if (!event.accepted || !event.connectionId || !event.lineUuid) continue;
+    if (!event.accepted || !event.lineUuid) continue;
     sent += await observe(rules, event.connectionId, event.lineUuid, event.statusUuid, event.receivedAt);
   }
   return { checked: events.length, sent };

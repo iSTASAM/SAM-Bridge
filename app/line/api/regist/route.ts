@@ -4,6 +4,7 @@ import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
 import { getConnection } from "@/lib/ixacs-connections";
 import { connectionAsTarget, discoverIxacsLines } from "@/lib/ixacs-client";
 import { registCtMonitor } from "@/lib/ixacs-regist";
+import { dispatchLineStatusChange } from "@/lib/line-notification-runner";
 import { isLineControllable } from "@/lib/push-api-keys";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,19 @@ export async function POST(request: Request) {
     },
     connection.id,
   );
+
+  if (result.ok) {
+    try {
+      await dispatchLineStatusChange(
+        productionLineUuid,
+        andonStatusStyleUuid,
+        new Date().toISOString(),
+        connection.id,
+      );
+    } catch (error) {
+      console.warn("LINE notification after status change failed:", error);
+    }
+  }
 
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }

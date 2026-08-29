@@ -10,7 +10,8 @@ import styles from "./line-portal.module.css";
 const COPY = {
   th: {
     title: "ตั้งค่าการแจ้งเตือน",
-    lead: "เลือกสถานะที่ต้องการ ระบบจะแจ้ง LINE ของคุณทันทีเมื่อเครื่องเข้าสู่สถานะนั้น",
+    lead: "เลือกสถานะที่ต้องการ ระบบจะแจ้ง LINE ของคุณทันทีเมื่อเครื่องเข้าสู่สถานะนั้น ต้องแอดเพื่อน OA และทดสอบด้วยการเปลี่ยนสถานะ",
+    hint: "ถ้าเครื่องอยู่ในสถานะนี้แล้ว ระบบจะส่งทันทีเมื่อกดเพิ่ม",
     line: "เครื่องจักร / ไลน์ผลิต",
     status: "สถานะที่ต้องการแจ้ง",
     add: "เพิ่มการแจ้งเตือน",
@@ -26,7 +27,8 @@ const COPY = {
   },
   en: {
     title: "Notification settings",
-    lead: "Choose a status. Your LINE account will be notified as soon as the machine enters it.",
+    lead: "Choose a status. Your LINE account is notified as soon as the machine enters it. Add the OA as a friend, then change the status to test.",
+    hint: "If the machine is already in this status, a notification is sent when you add the rule.",
     line: "Machine / production line",
     status: "Status to notify",
     add: "Add notification",
@@ -42,7 +44,8 @@ const COPY = {
   },
   ja: {
     title: "通知設定",
-    lead: "通知するステータスを選択すると、設備がその状態になった時点ですぐに通知します。",
+    lead: "通知するステータスを選択すると、設備がその状態になった時点ですぐに通知します。OA を友だち追加し、ステータス変更で確認してください。",
+    hint: "すでにその状態の場合は、追加した時点で通知します。",
     line: "設備・生産ライン",
     status: "通知するステータス",
     add: "通知を追加",
@@ -115,10 +118,14 @@ export function LineNotificationSettings({ lines }: { lines: LineStatusRow[] }) 
       const response = await fetch("/line/api/notification-rules", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ lineUuid: selectedLine.uuid, statusUuid }),
+        body: JSON.stringify({
+          lineUuid: selectedLine.uuid,
+          statusUuid,
+          currentStatusUuid: selectedLine.statusUuid,
+        }),
       });
-      const data = (await response.json()) as { rule?: LineNotificationRule };
-      if (!response.ok || !data.rule) throw new Error("SAVE_FAILED");
+      const data = (await response.json()) as { rule?: LineNotificationRule; error?: string };
+      if (!response.ok || !data.rule) throw new Error(data.error || "SAVE_FAILED");
       setRules((current) => [data.rule!, ...current.filter((rule) => rule.id !== data.rule!.id)]);
     } catch {
       setError(copy.saveError);
@@ -159,6 +166,7 @@ export function LineNotificationSettings({ lines }: { lines: LineStatusRow[] }) 
           <div>
             <h2 className={styles.notificationTitle}>{copy.title}</h2>
             <p className={styles.notificationLead}>{copy.lead}</p>
+            <p className={styles.notificationLead}>{copy.hint}</p>
           </div>
         </div>
 
