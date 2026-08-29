@@ -11,6 +11,7 @@ type Settings = {
   publicUrl: string;
   callbackUrl: string;
   channelSecretConfigured: boolean;
+  channelAccessTokenConfigured: boolean;
   liffId: string;
   lineLoginChannelId: string;
   updatedAt: string | null;
@@ -27,6 +28,8 @@ function mapSaveError(
       return copy.errPublicUrl;
     case "CHANNEL_SECRET_REQUIRED":
       return copy.errSecret;
+    case "CHANNEL_ACCESS_TOKEN_REQUIRED":
+      return copy.errAccessToken;
     case "LIFF_ID_REQUIRED":
     case "INVALID_LIFF_ID":
       return copy.errLiff;
@@ -48,6 +51,7 @@ export function LineWebhookSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [publicUrl, setPublicUrl] = useState("https://sam-bridge.vercel.app");
   const [channelSecret, setChannelSecret] = useState("");
+  const [channelAccessToken, setChannelAccessToken] = useState("");
   const [liffId, setLiffId] = useState("");
   const [lineLoginChannelId, setLineLoginChannelId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -89,7 +93,7 @@ export function LineWebhookSettings() {
       const response = await fetch("/api/line/webhook-settings", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ publicUrl, channelSecret, liffId, lineLoginChannelId }),
+        body: JSON.stringify({ publicUrl, channelSecret, channelAccessToken, liffId, lineLoginChannelId }),
       });
       const data = (await response.json().catch(() => ({}))) as Settings & { error?: string };
       if (!response.ok) {
@@ -101,6 +105,7 @@ export function LineWebhookSettings() {
       setLiffId(data.liffId);
       setLineLoginChannelId(data.lineLoginChannelId);
       setChannelSecret("");
+      setChannelAccessToken("");
       setMessage(copy.saved);
     } finally {
       setBusy(false);
@@ -189,6 +194,23 @@ export function LineWebhookSettings() {
               onChange={(event) => setChannelSecret(event.target.value)}
             />
             <span className="machine-help">{copy.channelSecretHint}</span>
+          </label>
+
+          <label className="machine-field">
+            <span className="machine-label">{copy.channelAccessToken}</span>
+            <input
+              className="machine-input"
+              type="password"
+              autoComplete="off"
+              placeholder={
+                settings?.channelAccessTokenConfigured
+                  ? "••••••••••••••••"
+                  : copy.channelAccessTokenPlaceholder
+              }
+              value={channelAccessToken}
+              onChange={(event) => setChannelAccessToken(event.target.value)}
+            />
+            <span className="machine-help">{copy.channelAccessTokenHint}</span>
           </label>
 
           <label className="machine-field">

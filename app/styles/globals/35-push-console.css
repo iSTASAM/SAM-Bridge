@@ -18,17 +18,6 @@
   margin: 0;
 }
 
-.pac-storage {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, #1a7f4b 24%, var(--border));
-  border-radius: 10px;
-  background: color-mix(in srgb, #1a7f4b 8%, var(--bg));
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .pac-subnav {
   display: flex;
   gap: 20px;
@@ -352,9 +341,17 @@
   color: var(--text-primary);
 }
 
+.modal .dx-field {
+  min-width: 0;
+  width: 100%;
+}
+
 .modal .dx-field input,
 .modal .dx-field select {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 40px;
   padding: 0 12px;
   color: var(--text-primary);
@@ -367,8 +364,9 @@
 
 .modal .dx-field input:focus,
 .modal .dx-field select:focus {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline: none;
+  border-color: color-mix(in srgb, var(--focus-ring) 70%, var(--border-input));
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .pac-drawer {
@@ -470,29 +468,41 @@
 }
 
 .pac-create-modal {
-  width: min(480px, 100%);
+  width: min(480px, calc(100vw - 32px));
+  max-width: 100%;
   max-height: calc(100dvh - 32px);
+  padding: 20px 20px 16px;
   overflow: hidden;
+}
+
+.pac-create-modal > h2 {
+  flex-shrink: 0;
 }
 
 .pac-create-body {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  min-width: 0;
   min-height: 0;
+  margin-inline: 0;
+  padding: 2px;
   overflow: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pac-create-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
+  min-width: 0;
 }
 
 .pac-create-modal .modal-actions {
   flex-shrink: 0;
-  margin-top: 4px;
+  margin-top: 0;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
@@ -502,10 +512,14 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  min-height: 0;
 }
 
 .pac-line-search {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 40px;
   padding: 0 12px;
   color: var(--text-primary);
@@ -517,15 +531,17 @@
 }
 
 .pac-line-search:focus {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline: none;
+  border-color: color-mix(in srgb, var(--focus-ring) 70%, var(--border-input));
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 .pac-line-list {
-  min-height: 140px;
-  max-height: min(280px, calc(100dvh - 320px));
+  min-height: 112px;
+  max-height: clamp(112px, 32dvh, 260px);
   overflow: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -648,10 +664,23 @@
     margin-left: 0;
   }
 
+  .modal-backdrop:has(.pac-create-modal) {
+    align-items: flex-end;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      0
+      0
+      0;
+  }
+
   .pac-create-modal {
     width: 100%;
-    max-height: 100dvh;
-    border-radius: 16px;
+    max-width: none;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 8px);
+    border-radius: 16px 16px 0 0;
+    padding:
+      18px 16px
+      calc(12px + env(safe-area-inset-bottom, 0px));
   }
 
   .pac-create-grid {
@@ -659,6 +688,60 @@
   }
 
   .pac-line-list {
-    max-height: min(240px, calc(100dvh - 300px));
+    max-height: clamp(120px, 36dvh, 280px);
+  }
+
+  .pac-create-modal .modal-actions {
+    flex-wrap: wrap;
+  }
+
+  .pac-create-modal .modal-actions .btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+@media (max-height: 640px) {
+  .pac-create-modal {
+    max-height: calc(100dvh - 16px);
+    padding: 16px 16px 12px;
+    gap: 10px;
+  }
+
+  .pac-line-list {
+    min-height: 88px;
+    max-height: clamp(88px, 28dvh, 180px);
+  }
+}
+
+@media (max-height: 480px) {
+  .modal-backdrop:has(.pac-create-modal) {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .pac-create-modal {
+    width: 100%;
+    max-width: none;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+    padding:
+      max(12px, env(safe-area-inset-top))
+      16px
+      max(12px, env(safe-area-inset-bottom));
+  }
+
+  .pac-create-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pac-line-list {
+    min-height: 72px;
+    max-height: clamp(72px, 24dvh, 140px);
+  }
+
+  .pac-create-body {
+    gap: 10px;
   }
 }

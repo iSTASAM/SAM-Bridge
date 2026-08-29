@@ -4,6 +4,7 @@ import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
 import { getConnection } from "@/lib/ixacs-connections";
 import { connectionAsTarget, discoverIxacsLines } from "@/lib/ixacs-client";
 import { registCtMonitor } from "@/lib/ixacs-regist";
+import { isLineControllable } from "@/lib/push-api-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,13 @@ export async function POST(request: Request) {
   const connection = await getConnection(session.connectionId);
   if (!connection || connection.loginId.trim().toLowerCase() !== session.loginId.trim().toLowerCase()) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!(await isLineControllable(connection.id, productionLineUuid))) {
+    return NextResponse.json(
+      { ok: false, error: "LINE_NOT_CONFIGURED_FOR_PUSH" },
+      { status: 403 },
+    );
   }
 
   const discovery = await discoverIxacsLines(connectionAsTarget(connection));

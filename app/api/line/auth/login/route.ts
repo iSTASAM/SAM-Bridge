@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createLineSessionToken, LINE_AUTH_COOKIE, lineSessionCookieOptions } from "@/lib/line-auth";
 import { authenticateSavedConnection } from "@/lib/ixacs-connections";
+import { linkLoggedInRichMenu } from "@/lib/line-messaging";
 import { getLineWebhookSettings } from "@/lib/line-webhook-settings";
 import { lineWebPreviewEnabled } from "@/lib/line-web-preview";
 
@@ -72,6 +73,14 @@ export async function POST(request: Request) {
       lineUserId,
     });
     if (!token) throw new Error("SESSION_NOT_CONFIGURED");
+
+    // Switch this LINE user to the logged-in rich menu (best-effort; login still succeeds).
+    try {
+      await linkLoggedInRichMenu(lineUserId);
+    } catch (error) {
+      console.warn("rich menu link after login failed:", error);
+    }
+
     const response = NextResponse.json({ ok: true, destination: "/line/dashboard" });
     response.cookies.set(LINE_AUTH_COOKIE, token, lineSessionCookieOptions());
     return response;

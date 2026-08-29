@@ -6,6 +6,7 @@ import { getSupabaseAdmin, supabaseConfigured } from "@/lib/supabase-admin";
 export type LineWebhookSettings = {
   publicUrl: string;
   channelSecret: string;
+  channelAccessToken: string;
   liffId: string;
   lineLoginChannelId: string;
   updatedAt: string;
@@ -17,6 +18,7 @@ type DbRow = {
   id: number;
   public_url: string;
   channel_secret: string;
+  channel_access_token?: string | null;
   liff_id: string;
   line_login_channel_id: string;
   updated_at: string;
@@ -25,6 +27,7 @@ type DbRow = {
 const FILE = path.join(process.cwd(), "data", "line-webhook-settings.json");
 
 let secretCache: { value: string; expiresAt: number } | null = null;
+let accessTokenCache: { value: string; expiresAt: number } | null = null;
 
 function strip(value?: string) {
   return value?.trim().replace(/^["']|["']$/g, "") || "";
@@ -36,6 +39,14 @@ function rememberSecret(value: string) {
     return;
   }
   secretCache = { value, expiresAt: Date.now() + 60_000 };
+}
+
+function rememberAccessToken(value: string) {
+  if (!value) {
+    accessTokenCache = null;
+    return;
+  }
+  accessTokenCache = { value, expiresAt: Date.now() + 60_000 };
 }
 
 function envPublicUrl() {
@@ -58,6 +69,7 @@ function fromEnv(): Partial<LineWebhookSettings> {
   return {
     publicUrl: envPublicUrl(),
     channelSecret: strip(process.env.LINE_CHANNEL_SECRET),
+    channelAccessToken: strip(process.env.LINE_CHANNEL_ACCESS_TOKEN),
     liffId: strip(process.env.LINE_LIFF_ID),
     lineLoginChannelId: strip(process.env.LINE_LOGIN_CHANNEL_ID),
   };
@@ -67,10 +79,11 @@ function readFileSettings(): LineWebhookSettings | null {
   if (!existsSync(FILE)) return null;
   try {
     const value = JSON.parse(readFileSync(FILE, "utf8")) as Partial<LineWebhookSettings>;
-    if (!value.publicUrl && !value.channelSecret) return null;
+    if (!value.publicUrl && !value.channelSecret && !value.channelAccessToken) return null;
     return {
       publicUrl: value.publicUrl ?? "",
       channelSecret: value.channelSecret ?? "",
+      channelAccessToken: value.channelAccessToken ?? "",
       liffId: value.liffId ?? "",
       lineLoginChannelId: value.lineLoginChannelId ?? "",
       updatedAt: value.updatedAt ?? "",
@@ -95,6 +108,7 @@ async function readSupabaseSettings(): Promise<LineWebhookSettings | null> {
   return {
     publicUrl: row.public_url ?? "",
     channelSecret: row.channel_secret ? decryptSecret(row.channel_secret) : "",
+    channelAccessToken: row.channel_access_token ? decryptSecret(row.channel_access_token) : "",
     liffId: row.liff_id ?? "",
     lineLoginChannelId: row.line_login_channel_id ?? "",
     updatedAt: row.updated_at ?? "",
@@ -109,6 +123,7 @@ async function writeSupabaseSettings(value: LineWebhookSettings) {
     id: 1,
     public_url: value.publicUrl,
     channel_secret: encryptSecret(value.channelSecret),
+    channel_access_token: value.channelAccessToken ? encryptSecret(value.channelAccessToken) : "",
     liff_id: value.liffId,
     line_login_channel_id: value.lineLoginChannelId,
     updated_at: value.updatedAt,
@@ -118,15 +133,22 @@ async function writeSupabaseSettings(value: LineWebhookSettings) {
 
 function mergeSettings(stored: LineWebhookSettings | null): LineWebhookSettings | null {
   const env = fromEnv();
-  // Stored (Supabase/UI) wins over env so a renewed Messaging API secret is used immediately.
+  // Stored (Supabase/UI) wins over env so renewed Messaging API credentials apply immediately.
   const merged: LineWebhookSettings = {
     publicUrl: stored?.publicUrl || env.publicUrl || "",
     channelSecret: stored?.channelSecret || env.channelSecret || "",
+    channelAccessToken: stored?.channelAccessToken || env.channelAccessToken || "",
     liffId: stored?.liffId || env.liffId || "",
     lineLoginChannelId: stored?.lineLoginChannelId || env.lineLoginChannelId || "",
     updatedAt: stored?.updatedAt || "",
   };
-  if (!merged.publicUrl && !merged.channelSecret && !merged.liffId && !merged.lineLoginChannelId) {
+  if (
+    !merged.publicUrl &&
+    !merged.channelSecret &&
+    !merged.channelAccessToken &&
+    !merged.liffId &&
+    !merged.lineLoginChannelId
+  ) {
     return null;
   }
   return merged;
@@ -163,6 +185,34 @@ export async function getLineChannelSecret(): Promise<string> {
   return fallback;
 }
 
+export async function getLineChannelAccessToken(): Promise<string> {
+  if (accessTokenCache && accessTokenCache.expiresAt > Date.now()) return accessTokenCache.value;
+
+  if (supabaseConfigured()) {
+    try {
+      const stored = await Promise.race([
+        readSupabaseSettings(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 700)),
+      ]);
+      if (stored?.channelAccessToken) {
+        rememberAccessToken(stored.channelAccessToken);
+        return stored.channelAccessToken;
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  const fromEnv = strip(process.env.LINE_CHANNEL_ACCESS_TOKEN);
+  if (fromEnv) {
+    rememberAccessToken(fromEnv);
+    return fromEnv;
+  }
+  const fromFile = readFileSettings()?.channelAccessToken ?? "";
+  if (fromFile) rememberAccessToken(fromFile);
+  return fromFile;
+}
+
 export async function getLineWebhookSettings(): Promise<LineWebhookSettings | null> {
   let stored: LineWebhookSettings | null = null;
   if (supabaseConfigured()) {
@@ -176,6 +226,7 @@ export async function getLineWebhookSettings(): Promise<LineWebhookSettings | nu
   }
   const merged = mergeSettings(stored);
   if (merged?.channelSecret) rememberSecret(merged.channelSecret);
+  if (merged?.channelAccessToken) rememberAccessToken(merged.channelAccessToken);
   return merged;
 }
 
@@ -214,6 +265,7 @@ export async function saveLineWebhookSettings(
   channelSecret: string,
   liffId = "",
   lineLoginChannelId = "",
+  channelAccessToken = "",
 ) {
   if (!supabaseConfigured()) throw new Error("SUPABASE_NOT_CONFIGURED");
   if (!connectionSecretsConfigured()) throw new Error("CONNECTIONS_ENCRYPTION_KEY_MISSING");
@@ -221,6 +273,7 @@ export async function saveLineWebhookSettings(
   const current = await getLineWebhookSettings();
   const secret = strip(channelSecret) || current?.channelSecret || "";
   if (!secret) throw new Error("CHANNEL_SECRET_REQUIRED");
+  const accessToken = strip(channelAccessToken) || current?.channelAccessToken || "";
   const nextLiffId = strip(liffId) || current?.liffId || "";
   const nextChannelId = strip(lineLoginChannelId) || current?.lineLoginChannelId || "";
   if (!nextLiffId) throw new Error("LIFF_ID_REQUIRED");
@@ -231,6 +284,7 @@ export async function saveLineWebhookSettings(
   const value: LineWebhookSettings = {
     publicUrl: normalizePublicUrl(publicUrl || current?.publicUrl || envPublicUrl() || "https://sam-bridge.vercel.app"),
     channelSecret: secret,
+    channelAccessToken: accessToken,
     liffId: nextLiffId,
     lineLoginChannelId: nextChannelId,
     updatedAt: new Date().toISOString(),
@@ -238,6 +292,7 @@ export async function saveLineWebhookSettings(
 
   await writeSupabaseSettings(value);
   rememberSecret(value.channelSecret);
+  rememberAccessToken(value.channelAccessToken);
   // Keep a local mirror for offline/dev only.
   try {
     writeFileSettings(value);

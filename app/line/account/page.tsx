@@ -3,7 +3,7 @@ import { loadLinePortalData } from "../load-portal-data";
 
 export const dynamic = "force-dynamic";
 
-export default async function LineDashboardPage() {
+export default async function LineAccountPage() {
   const data = await loadLinePortalData();
-  return <LinePortal {...data} page="home" />;
+  return <LinePortal {...data} page="account" />;
 }

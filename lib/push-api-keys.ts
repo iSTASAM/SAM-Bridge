@@ -387,6 +387,25 @@ export async function getPushKeyAssignment(apiKey: string | null) {
   return { connectionId: issued.connectionId, lineUuid: issued.lineUuid };
 }
 
+/** Active (non-disabled, non-expired) push keys for a company → controllable production lines. */
+export async function getControllableLineUuids(connectionId: string): Promise<Set<string>> {
+  await ensureHydrated();
+  const now = Date.now();
+  const ids = new Set<string>();
+  for (const item of apiKeys.values()) {
+    if (item.connectionId !== connectionId) continue;
+    if (item.status === "disabled") continue;
+    if (item.expiresAt && Date.parse(item.expiresAt) < now) continue;
+    if (item.lineUuid) ids.add(item.lineUuid);
+  }
+  return ids;
+}
+
+export async function isLineControllable(connectionId: string, lineUuid: string) {
+  const ids = await getControllableLineUuids(connectionId);
+  return ids.has(lineUuid);
+}
+
 export function pushKeysStorage() {
   return supabaseConfigured() ? ("supabase" as const) : ("file" as const);
 }

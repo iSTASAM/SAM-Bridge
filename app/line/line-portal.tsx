@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { startTransition, useEffect, useMemo, useState, type CSSProperties } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FiDatabase, FiHome, FiLogOut, FiUser, FiX } from "react-icons/fi";
+import { FiHome, FiLogOut, FiUser, FiX } from "react-icons/fi";
 import { LanguageMenu } from "@/app/language-menu";
 import { useLocale, type Locale } from "@/app/locale-context";
 import { ThemeMenu } from "@/app/theme-menu";
 import styles from "./line-portal.module.css";
 
-type Customer = { id: string; name: string };
 type Group = { uuid: string; name: string; lines: Array<{ uuid: string; name: string }> };
 
 export type LineStatusOption = {
@@ -38,37 +38,43 @@ export type LineStatusRow = {
   blinkingBackgroundColor: string | null;
   blinkingTextColor: string | null;
   options: LineStatusOption[];
+  /** True when this line has an active Push API key in /settings/push. */
+  controllable: boolean;
 };
 
-type Props = {
+export type LinePortalProps = {
+  page: "home" | "account";
   connectionId: string;
   user: { displayName: string; customerCompanyId: string; loginId: string };
-  customers: Customer[];
+  lineProfile: { displayName: string; pictureUrl: string | null } | null;
   groups: Group[];
   lines: LineStatusRow[];
   dataError: string | null;
 };
+
+type Props = LinePortalProps;
 
 const COPY = {
   th: {
     brand: "SAM Bridge",
     groups: "กลุ่มการผลิต",
     lines: "ไลน์ทั้งหมด",
-    statusBoard: "สถานะการผลิต",
     noStatus: "—",
     loadError: "ไม่สามารถโหลดสถานะการผลิตได้ในขณะนี้",
     noLineData: "ยังไม่มีข้อมูลไลน์",
-    customers: "บริษัทลูกค้า",
     account: "บัญชีของฉัน",
+    lineProfile: "โปรไฟล์ LINE",
     customerId: "ID บริษัทลูกค้า",
     loginId: "Login ID",
+    company: "บริษัท (iXacs)",
     accountNote: "บัญชีนี้ใช้สำหรับพอร์ทัล LINE และแยกจาก session ของ Web Application",
     home: "หน้าหลัก",
-    data: "ข้อมูล",
     profile: "บัญชี",
     logout: "ออกจากระบบ",
     nav: "เมนู",
     changeStatus: "เปลี่ยนสถานะ",
+    viewStatus: "ดูสถานะ",
+    viewOnlyHint: "ไลน์นี้ยังไม่ได้ตั้งค่า Push API — ดูได้อย่างเดียว สั่งกลับ iXacs ไม่ได้",
     filter: "ค้นหาสถานะ",
     filterPlaceholder: "พิมพ์เพื่อกรอง",
     noOptions: "ไลน์นี้ยังไม่มีสถานะที่ตั้งค่าไว้",
@@ -80,21 +86,22 @@ const COPY = {
     brand: "SAM Bridge",
     groups: "Production groups",
     lines: "All lines",
-    statusBoard: "Production status",
     noStatus: "—",
     loadError: "Could not load production status right now",
     noLineData: "No line data yet",
-    customers: "Customer companies",
     account: "My account",
+    lineProfile: "LINE profile",
     customerId: "Customer company ID",
     loginId: "Login ID",
+    company: "Company (iXacs)",
     accountNote: "This account is for the LINE portal and is separate from the web app session.",
     home: "Home",
-    data: "Data",
     profile: "Account",
     logout: "Log out",
     nav: "Menu",
     changeStatus: "Change status",
+    viewStatus: "View status",
+    viewOnlyHint: "This line has no Push API key — view only; cannot send to iXacs",
     filter: "Filter statuses",
     filterPlaceholder: "Type to filter",
     noOptions: "No configured statuses for this line",
@@ -106,21 +113,22 @@ const COPY = {
     brand: "SAM Bridge",
     groups: "生産グループ",
     lines: "ライン合計",
-    statusBoard: "生産ステータス",
     noStatus: "—",
     loadError: "現在 生産ステータスを読み込めません",
     noLineData: "ラインデータがありません",
-    customers: "顧客会社",
     account: "マイアカウント",
+    lineProfile: "LINEプロフィール",
     customerId: "顧客会社ID",
     loginId: "ログインID",
+    company: "会社（iXacs）",
     accountNote: "このアカウントは LINE ポータル用で、Web アプリのセッションとは分離されています。",
     home: "ホーム",
-    data: "データ",
     profile: "アカウント",
     logout: "ログアウト",
     nav: "メニュー",
     changeStatus: "ステータス変更",
+    viewStatus: "ステータスを見る",
+    viewOnlyHint: "このラインは Push API 未設定のため閲覧のみです（iXacs へ送信不可）",
     filter: "ステータス検索",
     filterPlaceholder: "入力して絞り込み",
     noOptions: "このラインに設定されたステータスがありません",
@@ -226,6 +234,7 @@ function StatusPicker({
   copy,
   pendingUuid,
   error,
+  readOnly,
   onClose,
   onSelect,
 }: {
@@ -234,6 +243,7 @@ function StatusPicker({
   copy: (typeof COPY)[Locale];
   pendingUuid: string | null;
   error: string | null;
+  readOnly: boolean;
   onClose: () => void;
   onSelect: (status: LineStatusOption) => void;
 }) {
@@ -255,13 +265,15 @@ function StatusPicker({
           <div>
             <p className={styles.sheetEyebrow}>{line.name}</p>
             <h2 id="line-status-sheet-title" className={styles.sheetTitle}>
-              {copy.changeStatus}
+              {readOnly ? copy.viewStatus : copy.changeStatus}
             </h2>
           </div>
           <button type="button" className={styles.iconBtn} aria-label={copy.close} onClick={onClose}>
             <FiX size={18} aria-hidden />
           </button>
         </header>
+
+        {readOnly ? <p className={styles.sheetHint}>{copy.viewOnlyHint}</p> : null}
 
         <label className={styles.sheetFilter}>
           <span>{copy.filter}</span>
@@ -285,8 +297,10 @@ function StatusPicker({
                   type="button"
                   className={`${styles.statusOption} ${active ? styles.statusOptionActive : ""}`}
                   style={statusCellStyle(status)}
-                  disabled={Boolean(pendingUuid) || active}
-                  onClick={() => onSelect(status)}
+                  disabled={readOnly || Boolean(pendingUuid) || active}
+                  onClick={() => {
+                    if (!readOnly) onSelect(status);
+                  }}
                 >
                   <span>{pending ? copy.saving : label}</span>
                   {active ? <em>{copy.current}</em> : null}
@@ -304,13 +318,21 @@ function StatusPicker({
   );
 }
 
-export function LinePortal({ connectionId, user, customers, groups, lines: initialLines, dataError }: Props) {
+export function LinePortal({
+  page,
+  connectionId,
+  user,
+  lineProfile: initialLineProfile,
+  groups,
+  lines: initialLines,
+  dataError,
+}: Props) {
   const { locale } = useLocale();
   const copy = COPY[locale];
   const router = useRouter();
-  const [tab, setTab] = useState<"home" | "data" | "account">("home");
   const [loggingOut, setLoggingOut] = useState(false);
   const [lines, setLines] = useState(initialLines);
+  const [lineProfile, setLineProfile] = useState(initialLineProfile);
   const [selected, setSelected] = useState<LineStatusRow | null>(null);
   const [pendingUuid, setPendingUuid] = useState<string | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
@@ -318,6 +340,158 @@ export function LinePortal({ connectionId, user, customers, groups, lines: initi
   useEffect(() => {
     setLines(initialLines);
   }, [initialLines]);
+
+  useEffect(() => {
+    setLineProfile(initialLineProfile);
+  }, [initialLineProfile]);
+
+  // Lightweight realtime poll — only while home is visible; skips when tab is hidden.
+  useEffect(() => {
+    if (page !== "home") return;
+
+    const POLL_MS = 5_000;
+    let timer: number | null = null;
+    let inFlight: AbortController | null = null;
+    let disposed = false;
+
+    function applySnapshot(updates: Array<{ uuid: string; statusUuid: string | null }>) {
+      const byId = new Map(updates.map((item) => [item.uuid, item.statusUuid]));
+      startTransition(() => {
+        setLines((current) => {
+          let changed = false;
+          const next = current.map((line) => {
+            if (!byId.has(line.uuid)) return line;
+            const statusUuid = byId.get(line.uuid) ?? null;
+            if (statusUuid === line.statusUuid) return line;
+            changed = true;
+            const option = statusUuid ? line.options.find((item) => item.uuid === statusUuid) : null;
+            if (!option) {
+              return {
+                ...line,
+                statusUuid,
+                nameTh: statusUuid ? line.nameTh : null,
+                nameEn: statusUuid ? line.nameEn : null,
+                nameJa: statusUuid ? line.nameJa : null,
+              };
+            }
+            return {
+              ...line,
+              statusUuid,
+              nameTh: option.nameTh,
+              nameEn: option.nameEn,
+              nameJa: option.nameJa,
+              backgroundColor: option.backgroundColor,
+              textColor: option.textColor,
+              blinking: option.blinking,
+              blinkingBackgroundColor: option.blinkingBackgroundColor,
+              blinkingTextColor: option.blinkingTextColor,
+            };
+          });
+          return changed ? next : current;
+        });
+      });
+    }
+
+    async function tick() {
+      if (disposed || document.visibilityState === "hidden") return;
+      if (inFlight) return;
+      const controller = new AbortController();
+      inFlight = controller;
+      try {
+        const response = await fetch("/line/api/monitor", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          ok?: boolean;
+          lines?: Array<{ uuid: string; statusUuid: string | null }>;
+        };
+        if (!data.ok || !data.lines) return;
+        applySnapshot(data.lines);
+      } catch (error) {
+        if ((error as { name?: string } | null)?.name === "AbortError") return;
+      } finally {
+        if (inFlight === controller) inFlight = null;
+      }
+    }
+
+    function schedule() {
+      if (disposed) return;
+      if (timer != null) window.clearInterval(timer);
+      if (document.visibilityState === "visible") {
+        void tick();
+        timer = window.setInterval(() => void tick(), POLL_MS);
+      }
+    }
+
+    function onVisibility() {
+      if (document.visibilityState === "hidden") {
+        inFlight?.abort();
+        inFlight = null;
+        if (timer != null) {
+          window.clearInterval(timer);
+          timer = null;
+        }
+        return;
+      }
+      schedule();
+    }
+
+    schedule();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      inFlight?.abort();
+      if (timer != null) window.clearInterval(timer);
+    };
+  }, [page]);
+
+  useEffect(() => {
+    if (lineProfile?.displayName && lineProfile.pictureUrl) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const configRes = await fetch("/api/line/config", { cache: "no-store" });
+        const config = (await configRes.json()) as { liffId?: string; configured?: boolean };
+        if (!config.configured || !config.liffId) return;
+        const w = window as Window & {
+          liff?: {
+            init(o: { liffId: string }): Promise<void>;
+            isLoggedIn(): boolean;
+            isInClient(): boolean;
+            getProfile(): Promise<{ displayName: string; pictureUrl?: string }>;
+          };
+        };
+        if (!w.liff) {
+          await new Promise<void>((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = "https://static.line-scdn.net/liff/edge/2/sdk.js";
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error("LIFF_NOT_LOADED"));
+            document.head.appendChild(script);
+          });
+        }
+        const liff = (window as typeof w).liff;
+        if (!liff) return;
+        await liff.init({ liffId: config.liffId });
+        if (!liff.isLoggedIn()) return;
+        const profile = await liff.getProfile();
+        if (cancelled || !profile.displayName) return;
+        setLineProfile({
+          displayName: profile.displayName,
+          pictureUrl: profile.pictureUrl?.trim() || null,
+        });
+      } catch {
+        // Optional enrichment
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [lineProfile?.displayName, lineProfile?.pictureUrl]);
 
   async function logout() {
     if (loggingOut) return;
@@ -330,7 +504,7 @@ export function LinePortal({ connectionId, user, customers, groups, lines: initi
   }
 
   async function changeStatus(status: LineStatusOption) {
-    if (!selected || pendingUuid || status.uuid === selected.statusUuid) return;
+    if (!selected || !selected.controllable || pendingUuid || status.uuid === selected.statusUuid) return;
     setPendingUuid(status.uuid);
     setPickerError(null);
 
@@ -352,7 +526,8 @@ export function LinePortal({ connectionId, user, customers, groups, lines: initi
         responseJson?: { message?: string };
       };
       if (!data.ok) {
-        setPickerError(data.responseJson?.message || data.error || copy.loadError);
+        const code = data.error === "LINE_NOT_CONFIGURED_FOR_PUSH" ? copy.viewOnlyHint : null;
+        setPickerError(code || data.responseJson?.message || data.error || copy.loadError);
         return;
       }
 
@@ -405,11 +580,11 @@ export function LinePortal({ connectionId, user, customers, groups, lines: initi
             </button>
           </div>
         </div>
-        <h1 className={styles.hello}>{user.displayName}</h1>
+        <h1 className={styles.hello}>{lineProfile?.displayName || user.displayName}</h1>
       </header>
 
       <main className={styles.main}>
-        {tab === "home" ? (
+        {page === "home" ? (
           <>
             <div className={styles.grid}>
               <section className={styles.card}>
@@ -433,40 +608,38 @@ export function LinePortal({ connectionId, user, customers, groups, lines: initi
           </>
         ) : null}
 
-        {tab === "data" ? (
-          <>
-            <p className={styles.sectionLabel}>{copy.statusBoard}</p>
-            <StatusBoard
-              lines={lines}
-              dataError={dataError}
-              emptyLabel={copy.noLineData}
-              errorLabel={copy.loadError}
-              noStatus={copy.noStatus}
-              locale={locale}
-              onPick={setSelected}
-            />
-            {customers.length ? (
-              <section className={styles.card}>
-                <p className={styles.eyebrow}>{copy.customers}</p>
-                <div className={styles.list}>
-                  {customers.map((item) => (
-                    <div className={styles.item} key={item.id}>
-                      <strong>{item.name}</strong>
-                      <span>{item.id}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-          </>
-        ) : null}
-
-        {tab === "account" ? (
+        {page === "account" ? (
           <>
             <section className={styles.card}>
+              <p className={styles.eyebrow}>{copy.lineProfile}</p>
+              <div className={styles.profileRow}>
+                {lineProfile?.pictureUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    className={styles.avatar}
+                    src={lineProfile.pictureUrl}
+                    alt=""
+                    width={56}
+                    height={56}
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className={styles.avatarFallback} aria-hidden>
+                    <FiUser size={24} />
+                  </span>
+                )}
+                <div className={styles.profileText}>
+                  <p className={styles.value}>{lineProfile?.displayName || "—"}</p>
+                </div>
+              </div>
+            </section>
+            <section className={styles.card}>
               <p className={styles.eyebrow}>{copy.account}</p>
-              <p className={styles.value}>{user.displayName}</p>
               <div className={styles.list}>
+                <div className={styles.item}>
+                  <strong>{copy.company}</strong>
+                  <span>{user.displayName}</span>
+                </div>
                 <div className={styles.item}>
                   <strong>{copy.customerId}</strong>
                   <span className={styles.id}>{user.customerCompanyId}</span>
@@ -483,30 +656,22 @@ export function LinePortal({ connectionId, user, customers, groups, lines: initi
       </main>
 
       <nav className={styles.nav} aria-label={copy.nav}>
-        <button
-          type="button"
-          className={`${styles.navItem} ${tab === "home" ? styles.active : ""}`}
-          onClick={() => setTab("home")}
+        <Link
+          href="/line/dashboard"
+          className={`${styles.navItem} ${page === "home" ? styles.active : ""}`}
+          aria-current={page === "home" ? "page" : undefined}
         >
           <FiHome size={18} aria-hidden />
           <span>{copy.home}</span>
-        </button>
-        <button
-          type="button"
-          className={`${styles.navItem} ${tab === "data" ? styles.active : ""}`}
-          onClick={() => setTab("data")}
-        >
-          <FiDatabase size={18} aria-hidden />
-          <span>{copy.data}</span>
-        </button>
-        <button
-          type="button"
-          className={`${styles.navItem} ${tab === "account" ? styles.active : ""}`}
-          onClick={() => setTab("account")}
+        </Link>
+        <Link
+          href="/line/account"
+          className={`${styles.navItem} ${page === "account" ? styles.active : ""}`}
+          aria-current={page === "account" ? "page" : undefined}
         >
           <FiUser size={18} aria-hidden />
           <span>{copy.profile}</span>
-        </button>
+        </Link>
       </nav>
 
       {selectedLive ? (
@@ -516,6 +681,7 @@ export function LinePortal({ connectionId, user, customers, groups, lines: initi
           copy={copy}
           pendingUuid={pendingUuid}
           error={pickerError}
+          readOnly={!selectedLive.controllable}
           onClose={() => {
             if (pendingUuid) return;
             setSelected(null);
