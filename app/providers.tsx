@@ -6,10 +6,21 @@ import { AppSidebar, useSidebarHiddenState } from "./sidebar";
 import { AppToolbar } from "./app-toolbar";
 import { ThemeProvider } from "./theme-context";
 
+function isShellExempt(pathname: string) {
+  return (
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname === "/admin/login" ||
+    pathname === "/line" ||
+    pathname.startsWith("/line/")
+  );
+}
+
 function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { hidden, hide, show } = useSidebarHiddenState();
-  if (pathname === "/login" || pathname === "/admin/login" || pathname === "/line" || pathname.startsWith("/line/")) return children;
+
+  if (isShellExempt(pathname)) return children;
 
   return (
     <div className={`app-shell ${hidden ? "is-sidebar-hidden" : ""}`}>

@@ -17,6 +17,7 @@ import { DEST_ICONS } from "./settings/exports/destination-icons";
 import type { DestinationType } from "./settings/exports/types";
 import { SOURCE_ICONS } from "./settings/sources/source-icons";
 import type { SourceType } from "./settings/sources/types";
+import { IxacsLogo } from "./line/ixacs-logo";
 
 export type FlowSourceId = Extract<SourceType, "webhook" | "file-upload" | "database" | "mqtt">;
 type ConnectedDestId = Extract<DestinationType, "sap-odata" | "power-bi" | "line" | "slack" | "teams">;
@@ -301,7 +302,7 @@ function IntegrationCard({
       {variant === "dest" ? <Port name={`${id}-in`} side="in" live={portLive(`${id}-in`, hover, view)} /> : null}
       <span className="flow-card-icon">
         {id === "ixacs" ? (
-          <img src="/ixacs-logo.png" alt="" className="flow-ixacs-logo" />
+          <IxacsLogo width={72} className="flow-ixacs-logo" alt="" />
         ) : Icon ? (
           <Icon size={16} />
         ) : null}

@@ -122,7 +122,7 @@ export function AppSidebar({
   }, []);
 
   const nav = [
-    { href: "/", label: copy.home, exact: true, icon: FiHome },
+    { href: "/home", label: copy.home, exact: true, icon: FiHome },
     { href: "/settings", label: copy.devices, exact: false, icon: FiServer },
     { href: "/settings/push", label: copy.push, exact: false, icon: FiKey },
     ...(session?.role === "admin" ? [
@@ -151,7 +151,7 @@ export function AppSidebar({
         >
           <FiMenu size={18} />
         </button>
-        <Link href="/" className="font-display text-sm tracking-wide">
+        <Link href="/home" className="font-display text-sm tracking-wide">
           {copy.brand}
         </Link>
         <AppToolbar />
@@ -170,7 +170,7 @@ export function AppSidebar({
         className={`app-sidebar ${open ? "is-open" : ""} ${hidden ? "is-hidden" : ""}`}
       >
         <div className="app-sidebar-head">
-          <Link href="/" className="app-sidebar-brand" onClick={() => setOpen(false)}>
+          <Link href="/home" className="app-sidebar-brand" onClick={() => setOpen(false)}>
             {copy.brand}
           </Link>
           <button

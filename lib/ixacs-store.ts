@@ -9,10 +9,25 @@ import {
 import {
   getActiveConnection,
   getConnection,
-  listConnections,
   rememberSessionOnActive,
   rememberSessionOnConnection,
 } from "@/lib/ixacs-connections";
+import {
+  getIssuedKey as getStoredIssuedKey,
+  getIssuedKeys as listStoredApiKeys,
+  getPushKeyAssignment as getStoredPushKeyAssignment,
+  isPushAuthorized as isStoredPushAuthorized,
+  issueApiKey as issueStoredApiKey,
+  revokeApiKey as revokeStoredApiKey,
+  rotateApiKey as rotateStoredApiKey,
+  saveApiKey,
+  setApiKeyStatus as setStoredApiKeyStatus,
+  type IssuedApiKey,
+  type KeyEnvironment,
+  type KeyStatus,
+} from "@/lib/push-api-keys";
+
+export type { IssuedApiKey, KeyEnvironment, KeyStatus };
 
 export type AndonStatus = {
   uuid: string;
@@ -62,24 +77,6 @@ export type ProductionLine = {
   connectionId?: string | null;
 };
 
-export type KeyStatus = "active" | "disabled";
-export type KeyEnvironment = "live" | "test";
-
-export type IssuedApiKey = {
-  key: string;
-  createdAt: string;
-  name: string | null;
-  status: KeyStatus;
-  environment: KeyEnvironment;
-  expiresAt: string | null;
-  lastUsedAt: string | null;
-  lineUuid: string | null;
-  connectionId: string | null;
-  groupUuid: string | null;
-  groupName: string | null;
-  lineName: string | null;
-};
-
 export type PushEvent = {
   id: string;
   receivedAt: string;
@@ -117,7 +114,8 @@ type PersistedState = {
   lines: Record<string, ProductionLine>;
   statusesByLine: Record<string, Record<string, AndonStatus>>;
   historyByLine: Record<string, HistorySegment[]>;
-  apiKeys: Record<string, IssuedApiKey>;
+  /** @deprecated Keys live in Supabase / push-api-keys.json — kept optional for old files. */
+  apiKeys?: Record<string, IssuedApiKey>;
   pushEvents?: PushEvent[];
 };
 
@@ -130,7 +128,6 @@ let groups = new Map<string, ProductionGroup>();
 let lines = new Map<string, ProductionLine>();
 let statusesByLine = new Map<string, Map<string, AndonStatus>>();
 let historyByLine = new Map<string, HistorySegment[]>();
-let apiKeys = new Map<string, IssuedApiKey>();
 let pushEvents: PushEvent[] = [];
 let webhookSession: string | null = null;
 let hydrated = false;
@@ -210,8 +207,6 @@ async function hydrate() {
     return;
   }
 
-  let migratedKeys = false;
-
   try {
     const parsed = JSON.parse(readFileSync(STATE_FILE, "utf8")) as PersistedState & {
       lastPush?: {
@@ -245,49 +240,6 @@ async function hydrate() {
       );
       historyByLine = new Map(Object.entries(parsed.historyByLine ?? {}));
       pushEvents = Array.isArray(parsed.pushEvents) ? parsed.pushEvents.slice(-MAX_PUSH_EVENTS) : [];
-      const availableConnections = (await listConnections()).connections;
-      apiKeys = new Map(
-        Object.entries(parsed.apiKeys ?? {}).map(([key, item]) => {
-          const inferredConnection = item.lineUuid
-            ? availableConnections.find((connection) => connection.lineUuids.includes(item.lineUuid!))
-            : null;
-          const connectionId = item.connectionId ?? inferredConnection?.id ?? null;
-          if (!item.connectionId && connectionId) migratedKeys = true;
-          return [key, {
-            ...item,
-            connectionId,
-            groupUuid: item.groupUuid ?? null,
-            groupName: item.groupName ?? null,
-            lineName: item.lineName ?? null,
-            name: item.name ?? item.lineName ?? null,
-            status: item.status === "disabled" ? "disabled" : "active",
-            environment: item.environment === "test" ? "test" : "live",
-            expiresAt: item.expiresAt ?? null,
-            lastUsedAt: item.lastUsedAt ?? null,
-          }];
-        }),
-      );
-
-      for (const [id, line] of Object.entries(parsed.lines)) {
-        const legacyKey = (line as ProductionLine & { xApiKey?: string | null }).xApiKey;
-        if (legacyKey && !apiKeys.has(legacyKey)) {
-          apiKeys.set(legacyKey, {
-            key: legacyKey,
-            createdAt: line.receivedAt ?? new Date().toISOString(),
-            name: line.nameTh,
-            status: "active",
-            environment: "live",
-            expiresAt: null,
-            lastUsedAt: line.receivedAt ?? null,
-            lineUuid: id,
-            connectionId: line.connectionId ?? null,
-            groupUuid: line.groupUuid ?? null,
-            groupName: null,
-            lineName: line.nameTh,
-          });
-          migratedKeys = true;
-        }
-      }
     } else if (parsed.lastPush?.productionLineUuid) {
       const lineUuid = parsed.lastPush.productionLineUuid;
       ensureUngrouped();
@@ -309,12 +261,10 @@ async function hydrate() {
     lines = new Map();
     statusesByLine = new Map();
     historyByLine = new Map();
-    apiKeys = new Map();
     pushEvents = [];
   }
 
   ensureUngrouped();
-  if (migratedKeys) persist();
 }
 
 function persist() {
@@ -326,7 +276,6 @@ function persist() {
       [...statusesByLine.entries()].map(([id, map]) => [id, Object.fromEntries(map)]),
     ),
     historyByLine: Object.fromEntries(historyByLine),
-    apiKeys: Object.fromEntries(apiKeys),
     pushEvents,
   };
   writeFileSync(STATE_FILE, JSON.stringify(payload, null, 2), "utf8");
@@ -406,13 +355,6 @@ function rememberHistory(
   }
 }
 
-function bindKeyToLine(apiKey: string | null, lineUuid: string) {
-  if (!apiKey) return;
-  const issued = apiKeys.get(apiKey);
-  if (!issued) return;
-  if (!issued.lineUuid) issued.lineUuid = lineUuid;
-}
-
 async function rememberPushItem(
   parsed: unknown,
   sessionFromRequest: string | null,
@@ -420,7 +362,7 @@ async function rememberPushItem(
 ) {
   await hydrate();
 
-  const issuedKey = apiKeyFromHeader ? apiKeys.get(apiKeyFromHeader) ?? null : null;
+  const issuedKey = apiKeyFromHeader ? await getStoredIssuedKey(apiKeyFromHeader) : null;
   const connectionId = issuedKey?.connectionId ?? null;
 
   const root = asRecord(parsed);
@@ -505,10 +447,10 @@ async function rememberPushItem(
     connectionId,
   });
 
-  const bodyKey = readString(line?.xapiKey) ?? readString(line?.xApiKey);
-  bindKeyToLine(apiKeyFromHeader, lineUuid);
-  if (!apiKeyFromHeader) bindKeyToLine(bodyKey, lineUuid);
-  if (issuedKey) issuedKey.lastUsedAt = receivedAt;
+  if (issuedKey) {
+    if (!issuedKey.lineUuid) issuedKey.lineUuid = lineUuid;
+    issuedKey.lastUsedAt = receivedAt;
+  }
 
   for (const catalogStyle of styleCatalog) rememberStatus(lineUuid, catalogStyle, receivedAt);
   if (style) rememberStatus(lineUuid, style, receivedAt);
@@ -538,7 +480,7 @@ async function recordPushEvent(
   const status = asRecord(root?.status);
   const style = asRecord(root?.andonStatusStyle);
   const product = asRecord(root?.product);
-  const issued = apiKey ? apiKeys.get(apiKey) ?? null : null;
+  const issued = apiKey ? await getStoredIssuedKey(apiKey) : null;
   const connection = issued?.connectionId ? await getConnection(issued.connectionId) : null;
   const lineUuid = readUuid(line?.uuid) ?? readUuid(status?.productionLineUuid) ?? issued?.lineUuid ?? null;
   const statusUuid = readUuid(style?.uuid) ?? readUuid(status?.andonStatusStyleUuid);
@@ -612,7 +554,10 @@ export async function rememberPushBatch(
       errors[result.error] = (errors[result.error] ?? 0) + 1;
     }
   }
-  if (accepted > 0) persist();
+  if (accepted > 0) {
+    persist();
+    if (apiKeyFromHeader) await saveApiKey(apiKeyFromHeader);
+  }
   return {
     ok: accepted > 0 && accepted === items.length,
     partial: accepted > 0 && accepted < items.length,
@@ -895,102 +840,51 @@ export async function issueApiKey(input: {
   environment?: KeyEnvironment;
   expiresAt?: string | null;
 }) {
-  await hydrate();
-  const connection = await getConnection(input.connectionId);
-  if (!connection || !connection.lineUuids.includes(input.lineUuid)) return null;
-  const key = randomUUID();
-  const name = input.name?.trim() || input.lineName;
-  apiKeys.set(key, {
-    key,
-    createdAt: new Date().toISOString(),
-    name,
-    status: "active",
-    environment: input.environment === "test" ? "test" : "live",
-    expiresAt: input.expiresAt ?? null,
-    lastUsedAt: null,
-    lineUuid: input.lineUuid,
-    connectionId: input.connectionId,
-    groupUuid: input.groupUuid,
-    groupName: input.groupName,
-    lineName: input.lineName,
-  });
-  persist();
-  return apiKeys.get(key)!;
+  return issueStoredApiKey(input);
 }
 
 export async function getIssuedKey(key: string) {
-  await hydrate();
-  return apiKeys.get(key) ?? null;
+  return getStoredIssuedKey(key);
 }
 
 export async function revokeApiKey(key: string) {
-  await hydrate();
-  const existed = apiKeys.delete(key);
-  if (existed) persist();
-  return existed;
+  return revokeStoredApiKey(key);
 }
 
 export async function setApiKeyStatus(key: string, status: KeyStatus) {
-  await hydrate();
-  const issued = apiKeys.get(key);
-  if (!issued) return null;
-  issued.status = status;
-  persist();
-  return issued;
+  return setStoredApiKeyStatus(key, status);
 }
 
 export async function rotateApiKey(key: string) {
-  await hydrate();
-  const issued = apiKeys.get(key);
-  if (!issued) return null;
-  const next = randomUUID();
-  apiKeys.delete(key);
-  apiKeys.set(next, { ...issued, key: next, lastUsedAt: null });
-  persist();
-  return apiKeys.get(next)!;
+  return rotateStoredApiKey(key);
 }
 
 export async function getIssuedKeys(connectionId?: string | null) {
   await hydrate();
-  return Promise.all([...apiKeys.values()]
-    .filter((item) => connectionId == null || item.connectionId === connectionId)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map(async (item) => {
-      const line = item.lineUuid ? lines.get(item.lineUuid) ?? null : null;
-      const group = line ? groups.get(line.groupUuid) ?? null : null;
-      const connection = item.connectionId ? await getConnection(item.connectionId) : null;
-      return {
-        key: item.key,
-        createdAt: item.createdAt,
-        name: item.name ?? item.lineName ?? null,
-        status: item.status === "disabled" ? "disabled" : "active",
-        environment: item.environment === "test" ? "test" : "live",
-        expiresAt: item.expiresAt ?? null,
-        lastUsedAt: item.lastUsedAt ?? null,
-        company: connection ? { id: connection.id, name: connection.name } : null,
-        line: line
-          ? {
-              uuid: line.uuid,
-              nameTh: line.nameTh,
-              nameEn: line.nameEn,
-              nameJa: line.nameJa,
-            }
-          : item.lineUuid && item.lineName
-            ? { uuid: item.lineUuid, nameTh: item.lineName, nameEn: item.lineName, nameJa: item.lineName }
-            : null,
-        group: group
-          ? {
-              uuid: group.uuid,
-              nameTh: group.nameTh,
-              nameEn: group.nameEn,
-              nameJa: group.nameJa,
-            }
-          : item.groupUuid && item.groupName
-            ? { uuid: item.groupUuid, nameTh: item.groupName, nameEn: item.groupName, nameJa: item.groupName }
-            : null,
-      };
-    }),
-  );
+  const stored = await listStoredApiKeys(connectionId);
+  return stored.map((item) => {
+    const line = item.line ? lines.get(item.line.uuid) ?? null : null;
+    const group = line ? groups.get(line.groupUuid) ?? null : null;
+    return {
+      ...item,
+      line: line
+        ? {
+            uuid: line.uuid,
+            nameTh: line.nameTh,
+            nameEn: line.nameEn,
+            nameJa: line.nameJa,
+          }
+        : item.line,
+      group: group
+        ? {
+            uuid: group.uuid,
+            nameTh: group.nameTh,
+            nameEn: group.nameEn,
+            nameJa: group.nameJa,
+          }
+        : item.group,
+    };
+  });
 }
 
 export async function applyMonitorRows(
@@ -1045,20 +939,9 @@ export async function getSessionSource(): Promise<"connection" | "webhook" | nul
 }
 
 export async function isPushAuthorized(apiKey: string | null) {
-  await hydrate();
-  if (process.env.PUSH_API_KEY && apiKey === process.env.PUSH_API_KEY) return true;
-  if (!apiKey) return false;
-  const issued = apiKeys.get(apiKey);
-  if (!issued) return false;
-  if (issued.status === "disabled") return false;
-  if (issued.expiresAt && Date.parse(issued.expiresAt) < Date.now()) return false;
-  return true;
+  return isStoredPushAuthorized(apiKey);
 }
 
 export async function getPushKeyAssignment(apiKey: string | null) {
-  await hydrate();
-  if (!apiKey) return null;
-  const issued = apiKeys.get(apiKey);
-  if (!issued) return null;
-  return { connectionId: issued.connectionId, lineUuid: issued.lineUuid };
+  return getStoredPushKeyAssignment(apiKey);
 }

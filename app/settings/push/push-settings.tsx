@@ -19,6 +19,7 @@ export function PushSettings() {
   const [keys, setKeys] = useState<IssuedKey[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [storage, setStorage] = useState<"supabase" | "file">("file");
   const [copied, setCopied] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -51,10 +52,15 @@ export function PushSettings() {
       setListError(copy.loadError);
       return [] as IssuedKey[];
     }
-    const data = (await response.json()) as { keys?: IssuedKey[]; companies?: Company[] };
+    const data = (await response.json()) as {
+      keys?: IssuedKey[];
+      companies?: Company[];
+      storage?: "supabase" | "file";
+    };
     const nextKeys = data.keys ?? [];
     setKeys(nextKeys);
     setCompanies(data.companies ?? []);
+    setStorage(data.storage === "supabase" ? "supabase" : "file");
     setSelectedCompanyId((current) => current || data.companies?.[0]?.id || "");
     setListError(null);
     return nextKeys;
@@ -237,6 +243,9 @@ export function PushSettings() {
         copied={copied === "url"}
         onCopy={() => void copyText("url", pushUrl)}
       />
+      <p className="pac-storage">
+        {storage === "supabase" ? copy.storageSupabase : copy.storageFile}
+      </p>
 
       <ApiKeysSection
         copy={copy}

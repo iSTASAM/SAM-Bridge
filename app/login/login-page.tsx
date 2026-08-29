@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { AppToolbar } from "../app-toolbar";
 import { useLocale } from "../locale-context";
 import { LOGIN_COPY } from "./login-copy";
@@ -13,7 +14,9 @@ export function LoginPage({ admin = false }: { admin?: boolean }) {
     <div className="login-page">
       <header className="login-topbar">
         <div className="login-topbar-inner">
-          <p className="login-brand">{copy.brand}</p>
+          <Link href="/" className="login-brand">
+            {copy.brand}
+          </Link>
           <AppToolbar />
         </div>
       </header>

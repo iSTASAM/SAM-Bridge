@@ -98,6 +98,7 @@ function IntegrationFlow({ copy }: { copy: HomeCopy }) {
   );
 }
 
+/** Authenticated console home — integration flow (unchanged). */
 export function HomePage() {
   const { locale } = useLocale();
   const copy = COPY[locale];

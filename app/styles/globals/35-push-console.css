@@ -18,6 +18,17 @@
   margin: 0;
 }
 
+.pac-storage {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #1a7f4b 24%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, #1a7f4b 8%, var(--bg));
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .pac-subnav {
   display: flex;
   gap: 20px;

@@ -24,7 +24,8 @@ const japanese = Noto_Sans_JP({
 
 export const metadata: Metadata = {
   title: "SAM Bridge",
-  description: "Connect iXacs production data to the systems you use.",
+  description:
+    "SAM Bridge connects your systems, data, automation, and communication channels in one workflow.",
   applicationName: "SAM Bridge",
 };
 

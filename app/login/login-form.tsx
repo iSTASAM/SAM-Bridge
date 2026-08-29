@@ -39,7 +39,7 @@ export function LoginForm({ copy, admin = false }: { copy: LoginCopy; admin?: bo
       }
 
       const next = searchParams.get("next");
-      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
+      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/home");
       router.refresh();
     } catch {
       setError(copy.unreachable);

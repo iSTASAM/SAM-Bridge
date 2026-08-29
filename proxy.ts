@@ -14,11 +14,13 @@ function isPushWebhook(request: NextRequest) {
 
 function isPublicPath(pathname: string) {
   return (
+    pathname === "/" ||
     pathname === "/login" ||
     pathname === "/admin/login" ||
     pathname === "/api/login" ||
     pathname === "/api/admin/login" ||
     pathname === "/api/logout" ||
+    pathname === "/api/session" ||
     pathname === "/line/login" ||
     pathname === "/api/line/config" ||
     pathname === "/api/line/auth/login" ||
@@ -90,7 +92,7 @@ export async function proxy(request: NextRequest) {
     if (pathname === "/login" || pathname === "/admin/login") {
       const session = await readSessionToken(request.cookies.get(AUTH_COOKIE)?.value);
       if (session && (pathname === "/login" || session.role === "admin")) {
-        return NextResponse.redirect(new URL("/", request.url));
+        return NextResponse.redirect(new URL("/home", request.url));
       }
     }
     return NextResponse.next();
@@ -114,7 +116,7 @@ export async function proxy(request: NextRequest) {
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(new URL("/home", request.url));
     }
     return NextResponse.next();
   }
@@ -124,7 +126,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const login = new URL("/login", request.url);
-  if (pathname !== "/") login.searchParams.set("next", pathname);
+  if (pathname !== "/" && pathname !== "/home") login.searchParams.set("next", pathname);
   return NextResponse.redirect(login);
 }
 

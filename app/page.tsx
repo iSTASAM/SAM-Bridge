@@ -1,5 +1,8 @@
-import { HomePage } from "./home-page";
+import { LandingPage } from "./landing-page";
+import { loadLinePreviewData } from "./line-preview/load-preview-data";
 
-export default function Home() {
-  return <HomePage />;
+/** Public marketing landing — always available at `/`. */
+export default async function Page() {
+  const preview = await loadLinePreviewData("th");
+  return <LandingPage preview={preview} />;
 }
