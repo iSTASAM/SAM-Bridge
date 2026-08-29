@@ -85,7 +85,30 @@ export async function linkLoggedInRichMenu(lineUserId: string) {
     });
     return { ok: false as const, error: "LINK_FAILED" as const, status: response.status };
   }
-  const linked = await getLinkedRichMenuId(lineUserId);
+
+  // LINE may return 200 even when the user ID belongs to another provider,
+  // the user blocked the OA, or the user is not a friend. Verify the result
+  // instead of treating the HTTP response alone as success.
+  let linked: string | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    linked = await getLinkedRichMenuId(lineUserId);
+    if (linked === richMenuId) break;
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+  }
+  if (linked !== richMenuId) {
+    console.warn("linkLoggedInRichMenu was not confirmed", {
+      lineUserId: `${lineUserId.slice(0, 8)}…`,
+      richMenuId,
+      linked,
+    });
+    return {
+      ok: false as const,
+      error: "LINK_NOT_CONFIRMED" as const,
+      richMenuId,
+      linked,
+    };
+  }
+
   console.log("linkLoggedInRichMenu ok", { richMenuId, linked });
   return { ok: true as const, richMenuId, linked };
 }

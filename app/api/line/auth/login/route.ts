@@ -91,16 +91,25 @@ export async function POST(request: Request) {
     }
 
     // Link Rich Menu 2 before returning so LINE shows it as soon as the user leaves LIFF.
+    let richMenu: { ok: boolean; error?: string };
     try {
-      const linked = await linkLoggedInRichMenu(lineUserId);
-      if (!linked.ok) {
-        console.warn("rich menu link after login did not succeed:", linked);
+      richMenu = await linkLoggedInRichMenu(lineUserId);
+      if (!richMenu.ok) {
+        console.warn("rich menu link after login did not succeed:", richMenu);
       }
     } catch (error) {
       console.warn("rich menu link after login failed:", error);
+      richMenu = { ok: false, error: "LINK_FAILED" };
     }
 
-    const response = NextResponse.json({ ok: true, destination: "/line/dashboard" });
+    const response = NextResponse.json({
+      ok: true,
+      destination: "/line/dashboard",
+      richMenu: {
+        ok: richMenu.ok,
+        error: richMenu.ok ? null : richMenu.error,
+      },
+    });
     response.cookies.set(LINE_AUTH_COOKIE, token, lineSessionCookieOptions());
     return response;
   } catch (error) {

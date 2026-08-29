@@ -113,7 +113,10 @@ export function LineWebhookSettings() {
   }
 
   const ready = Boolean(
-    settings?.channelSecretConfigured && settings.liffId && settings.lineLoginChannelId,
+    settings?.channelSecretConfigured &&
+      settings.channelAccessTokenConfigured &&
+      settings.liffId &&
+      settings.lineLoginChannelId,
   );
 
   const storageLabel =

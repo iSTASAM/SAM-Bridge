@@ -50,6 +50,22 @@ function mapError(code?: string): LineLoginErrorCode {
   return "invalid";
 }
 
+async function retryRichMenuSync() {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, attempt * 450));
+    }
+    const response = await fetch("/line/api/richmenu", {
+      method: "POST",
+      cache: "no-store",
+    }).catch(() => null);
+    if (!response?.ok) continue;
+    const result = (await response.json().catch(() => ({}))) as { ok?: boolean };
+    if (result.ok) return true;
+  }
+  return false;
+}
+
 function Shell({
   copy,
   state,
@@ -177,10 +193,19 @@ export function LineLoginPage() {
               },
         ),
       });
-      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      const result = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        richMenu?: { ok?: boolean; error?: string | null };
+      };
       if (!response.ok) {
         setState("error");
         setError(lineLoginErrorMessage(copy, mapError(result.error)));
+        return;
+      }
+      const richMenuReady = result.richMenu?.ok === true || (await retryRichMenuSync());
+      if (!webPreview && !richMenuReady) {
+        setState("error");
+        setError(copy.errorRichMenu);
         return;
       }
       window.location.replace("/line/dashboard");

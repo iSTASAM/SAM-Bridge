@@ -39,7 +39,6 @@ export async function POST() {
   }
   const result = await linkLoggedInRichMenu(session.lineUserId);
   return NextResponse.json({
-    ok: result.ok,
     ...result,
     expectedRichMenuId: lineLoggedInRichMenuId(),
   });

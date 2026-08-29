@@ -274,6 +274,7 @@ export async function saveLineWebhookSettings(
   const secret = strip(channelSecret) || current?.channelSecret || "";
   if (!secret) throw new Error("CHANNEL_SECRET_REQUIRED");
   const accessToken = strip(channelAccessToken) || current?.channelAccessToken || "";
+  if (!accessToken) throw new Error("CHANNEL_ACCESS_TOKEN_REQUIRED");
   const nextLiffId = strip(liffId) || current?.liffId || "";
   const nextChannelId = strip(lineLoginChannelId) || current?.lineLoginChannelId || "";
   if (!nextLiffId) throw new Error("LIFF_ID_REQUIRED");
