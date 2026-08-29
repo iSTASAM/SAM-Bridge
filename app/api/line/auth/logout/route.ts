@@ -1,89 +1,53 @@
 import { after } from "next/server";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import {
-  LINE_AUTH_COOKIE,
-  readLineSessionToken,
-} from "@/lib/line-auth";
+import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
 import { unlinkUserRichMenu } from "@/lib/line-messaging";
 
-function clearSessionCookie(response: NextResponse) {
-  const secure = process.env.NODE_ENV === "production";
-  // Expire with the same attributes used when setting the cookie.
-  response.cookies.set(LINE_AUTH_COOKIE, "", {
+function expiredSessionCookie() {
+  return {
     httpOnly: true,
-    sameSite: "lax",
-    secure,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 0,
     expires: new Date(0),
-  });
-  response.cookies.delete({
-    name: LINE_AUTH_COOKIE,
-    path: "/",
+  };
+}
+
+function scheduleUnlink(lineUserId: string | undefined) {
+  if (!lineUserId) return;
+  after(() => {
+    void unlinkUserRichMenu(lineUserId).catch((error) => {
+      console.warn("rich menu unlink after logout failed:", error);
+    });
   });
 }
 
-async function logoutAndClear() {
+/** Clear session cookie and optionally unlink rich menu (non-blocking). */
+export async function POST() {
   const jar = await cookies();
   const session = await readLineSessionToken(jar.get(LINE_AUTH_COOKIE)?.value);
-  const lineUserId = session?.lineUserId;
 
-  try {
-    jar.delete(LINE_AUTH_COOKIE);
-  } catch {
-    // Some runtimes only allow clearing via the response Set-Cookie header.
-  }
-
-  // Always clear the session cookie first — do not block logout on Messaging API.
   const response = NextResponse.json({ ok: true });
-  clearSessionCookie(response);
-
-  if (lineUserId) {
-    after(() => {
-      void unlinkUserRichMenu(lineUserId).catch((error) => {
-        console.warn("rich menu unlink after logout failed:", error);
-      });
-    });
-  }
-
+  response.cookies.set(LINE_AUTH_COOKIE, "", expiredSessionCookie());
+  scheduleUnlink(session?.lineUserId);
   return response;
 }
 
-/** POST — used by fetch; clears cookie in Set-Cookie on the response. */
-export async function POST() {
-  return logoutAndClear();
-}
-
 /**
- * GET — preferred for LIFF/WebView logout: navigation applies Set-Cookie
- * before the next page loads (avoids bounce back to the dashboard).
+ * GET kept for compatibility, but LIFF should prefer POST + client redirect.
+ * Uses 303 to /line/login so the browser applies Set-Cookie before the next page.
  */
 export async function GET(request: Request) {
   const jar = await cookies();
   const session = await readLineSessionToken(jar.get(LINE_AUTH_COOKIE)?.value);
-  const lineUserId = session?.lineUserId;
 
-  try {
-    jar.delete(LINE_AUTH_COOKIE);
-  } catch {
-    // Some runtimes only allow clearing via the response Set-Cookie header.
-  }
-
-  const url = new URL(request.url);
-  const redirectTo = new URL("/line/login", url.origin);
+  const redirectTo = new URL("/line/login", new URL(request.url).origin);
   redirectTo.searchParams.set("loggedOut", "1");
 
-  const response = NextResponse.redirect(redirectTo);
-  clearSessionCookie(response);
-
-  if (lineUserId) {
-    after(() => {
-      void unlinkUserRichMenu(lineUserId).catch((error) => {
-        console.warn("rich menu unlink after logout failed:", error);
-      });
-    });
-  }
-
+  const response = NextResponse.redirect(redirectTo, 303);
+  response.cookies.set(LINE_AUTH_COOKIE, "", expiredSessionCookie());
+  scheduleUnlink(session?.lineUserId);
   return response;
 }

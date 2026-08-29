@@ -24,6 +24,7 @@ function isPublicPath(pathname: string) {
     pathname === "/api/logout" ||
     pathname === "/api/session" ||
     pathname === "/line/login" ||
+    pathname === "/line/api/logout" ||
     pathname === "/api/line/config" ||
     pathname === "/api/line/auth/login" ||
     pathname === "/api/line/auth/logout" ||

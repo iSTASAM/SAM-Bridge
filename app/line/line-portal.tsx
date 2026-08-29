@@ -506,9 +506,18 @@ export function LinePortal({
   async function logout() {
     if (loggingOut) return;
     setLoggingOut(true);
-    // Full navigation so Set-Cookie is applied before /line/login renders
-    // (fetch + location.replace can bounce back if the cookie is still present).
-    window.location.assign("/api/line/auth/logout");
+    try {
+      // Prefer /line/api/logout (same tree as LIFF) — POST clears cookie reliably.
+      await fetch("/line/api/logout", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+    } catch {
+      // Still leave the portal even if the request fails.
+    } finally {
+      window.location.replace("/line/login?loggedOut=1");
+    }
   }
 
   async function changeStatus(status: LineStatusOption) {
