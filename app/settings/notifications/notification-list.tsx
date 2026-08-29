@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FiBell, FiEdit2, FiPlus, FiSettings, FiTrash2, FiZap } from "react-icons/fi";
+import { FiEdit2, FiPlus, FiSettings, FiTrash2, FiZap } from "react-icons/fi";
 import { useLocale } from "@/app/locale-context";
 import { NOTIFY_COPY } from "./copy";
 import {
@@ -139,11 +139,7 @@ export function NotificationList() {
         </div>
       ) : rules.length === 0 ? (
         <section className="notify-empty-state">
-          <span className="notify-empty-icon">
-            <FiBell size={22} />
-          </span>
           <h2>{copy.emptyRules}</h2>
-          <p>{copy.emptyRulesBody}</p>
           <Link
             href="/settings/notifications/new"
             className="btn btn-primary console-icon-btn"

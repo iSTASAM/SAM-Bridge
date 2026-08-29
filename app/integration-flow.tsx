@@ -17,11 +17,12 @@ import { DEST_ICONS } from "./settings/exports/destination-icons";
 import type { DestinationType } from "./settings/exports/types";
 import { SOURCE_ICONS } from "./settings/sources/source-icons";
 import type { SourceType } from "./settings/sources/types";
+import { LINE_WORKS_ICON } from "./settings/notifications/shared";
 import { IxacsLogo } from "./line/ixacs-logo";
 
 export type FlowSourceId = Extract<SourceType, "webhook" | "file-upload" | "database" | "mqtt">;
 type ConnectedDestId = Extract<DestinationType, "sap-odata" | "power-bi" | "line" | "slack" | "teams">;
-export type FlowDestId = ConnectedDestId | "excel" | "powerpoint";
+export type FlowDestId = ConnectedDestId | "excel" | "powerpoint" | "line-works";
 export type FlowDest = { id: FlowDestId; label: string };
 export type FlowSource = { id: FlowSourceId; label: string };
 export type FlowProviderId = DemoProviderId;
@@ -49,7 +50,16 @@ type View = {
 };
 
 const SOURCE_IDS: FlowSourceId[] = ["webhook", "file-upload", "database", "mqtt"];
-const DEST_IDS: FlowDestId[] = ["sap-odata", "power-bi", "excel", "powerpoint", "line", "slack", "teams"];
+const DEST_IDS: FlowDestId[] = [
+  "sap-odata",
+  "power-bi",
+  "excel",
+  "powerpoint",
+  "line",
+  "line-works",
+  "slack",
+  "teams",
+];
 const ALL_SOURCES: DemoSourceId[] = ["ixacs", ...SOURCE_IDS];
 const PROVIDERS = [
   { id: "claude" as const, name: "Claude", Icon: ClaudeIcon },
@@ -104,12 +114,20 @@ function PowerPointIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+function LineWorksIcon({ size = 16 }: { size?: number }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={LINE_WORKS_ICON} alt="" width={size} height={size} draggable={false} />
+  );
+}
+
 const FLOW_DEST_ICONS: Record<FlowDestId, ComponentType<{ size?: number }>> = {
   "sap-odata": DEST_ICONS["sap-odata"],
   "power-bi": DEST_ICONS["power-bi"],
   excel: ExcelIcon,
   powerpoint: PowerPointIcon,
   line: DEST_ICONS.line,
+  "line-works": LineWorksIcon,
   slack: DEST_ICONS.slack,
   teams: DEST_ICONS.teams,
 };
@@ -166,7 +184,10 @@ function inspectView(hover: Hover, fallback: DemoFlow): View | null {
     return { sources: [...flow.sources], dests: [], providers: [], stage: "source", flow };
   }
   if (isDest(hover)) {
-    const flow = hover === "excel" || hover === "powerpoint" ? fallback : flowByDestination(hover as DemoDestId);
+    const flow =
+      hover === "excel" || hover === "powerpoint" || hover === "line-works"
+        ? fallback
+        : flowByDestination(hover as DemoDestId);
     return { sources: [], dests: [hover], providers: [], stage: "complete", flow };
   }
   if (isProvider(hover)) {

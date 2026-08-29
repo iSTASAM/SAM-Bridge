@@ -136,6 +136,32 @@ export async function replyLineMessages(
   return { ok: true as const };
 }
 
+export async function pushLineMessages(
+  lineUserId: string,
+  messages: Array<Record<string, unknown>>,
+) {
+  if (!isLineMessagingUserId(lineUserId)) {
+    return { ok: false as const, error: "INVALID_LINE_USER_ID" as const };
+  }
+  const token = await getLineChannelAccessToken();
+  if (!token) {
+    console.warn("pushLineMessages: no Messaging API channel access token");
+    return { ok: false as const, error: "NO_CHANNEL_ACCESS_TOKEN" as const };
+  }
+  const response = await lineBotFetch(
+    token,
+    "https://api.line.me/v2/bot/message/push",
+    "POST",
+    JSON.stringify({ to: lineUserId, messages }),
+  );
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    console.warn("pushLineMessages failed:", response.status, body.slice(0, 500));
+    return { ok: false as const, error: "PUSH_FAILED" as const, status: response.status };
+  }
+  return { ok: true as const };
+}
+
 /** Remove per-user rich menu so the OA default (login) menu shows again. */
 export async function unlinkUserRichMenu(lineUserId: string) {
   if (!isRealLineUserId(lineUserId)) return { ok: false as const, skipped: true as const };

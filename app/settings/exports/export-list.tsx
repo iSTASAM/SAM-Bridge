@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FiDatabase, FiEdit2, FiPlus, FiSend, FiTrash2, FiZap } from "react-icons/fi";
+import { FiDatabase, FiDownload, FiEdit2, FiPlus, FiSend, FiTrash2, FiZap } from "react-icons/fi";
 import { useLocale } from "../../locale-context";
 import type { Connection } from "../connections/types";
 import { EXPORT_COPY } from "./copy";
@@ -12,7 +12,7 @@ import { DESTINATIONS, type ExportConfig } from "./types";
 
 const RUN_COPY = {
   th: {
-    subtitle: "ตั้งค่าการส่งข้อมูล iXacs ไปยังระบบปลายทาง ขณะนี้ Slack พร้อมใช้งานจริงแบบ Manual",
+    subtitle: "ตั้งค่าการส่งข้อมูล iXacs ไปยังระบบปลายทาง ขณะนี้ Slack และ Excel พร้อมใช้งานจริง",
     create: "สร้าง Data Export",
     ready: "พร้อมส่ง",
     draft: "ยังไม่พร้อม",
@@ -30,6 +30,10 @@ const RUN_COPY = {
     send: "ตรวจเงื่อนไขและส่ง",
     testing: "กำลังทดสอบ…",
     sending: "กำลังส่ง…",
+    downloadExcel: "ดาวน์โหลด Excel",
+    downloadingExcel: "กำลังสร้างไฟล์…",
+    downloadOk: "ดาวน์โหลดไฟล์ Excel สำเร็จ",
+    downloadFailed: "สร้างไฟล์ Excel ไม่สำเร็จ",
     testOk: "เชื่อมต่อ Slack สำเร็จ",
     sendOk: (rows: number, messages: number) => `ส่ง ${rows} ไลน์ไป Slack สำเร็จ (${messages} ข้อความ)`,
     noChanges: "ข้อมูลยังไม่เปลี่ยน จึงไม่มีข้อความใหม่ถูกส่ง",
@@ -37,7 +41,7 @@ const RUN_COPY = {
     webhookNeeded: "กรอก Slack Incoming Webhook URL เพื่อเปิดใช้งาน",
   },
   en: {
-    subtitle: "Configure iXacs delivery to destination systems. Slack manual delivery is now available.",
+    subtitle: "Configure iXacs delivery to destination systems. Slack and Excel delivery are available.",
     create: "Create data export",
     ready: "Ready",
     draft: "Not ready",
@@ -55,6 +59,10 @@ const RUN_COPY = {
     send: "Check conditions & send",
     testing: "Testing…",
     sending: "Sending…",
+    downloadExcel: "Download Excel",
+    downloadingExcel: "Building file…",
+    downloadOk: "Excel file downloaded",
+    downloadFailed: "Could not build the Excel file",
     testOk: "Slack connection successful",
     sendOk: (rows: number, messages: number) => `Sent ${rows} lines to Slack (${messages} message(s))`,
     noChanges: "No data changed, so no new message was sent.",
@@ -62,7 +70,7 @@ const RUN_COPY = {
     webhookNeeded: "Add a Slack Incoming Webhook URL to enable sending",
   },
   ja: {
-    subtitle: "iXacsデータの出力先を設定します。SlackへのManual送信が利用できます。",
+    subtitle: "iXacsデータの出力先を設定します。SlackとExcelへの出力が利用できます。",
     create: "Data Exportを作成",
     ready: "送信可能",
     draft: "未設定",
@@ -80,6 +88,10 @@ const RUN_COPY = {
     send: "条件を確認して送信",
     testing: "テスト中…",
     sending: "送信中…",
+    downloadExcel: "Excelをダウンロード",
+    downloadingExcel: "ファイル作成中…",
+    downloadOk: "Excelファイルをダウンロードしました",
+    downloadFailed: "Excelファイルを作成できませんでした",
     testOk: "Slack接続に成功しました",
     sendOk: (rows: number, messages: number) => `${rows}ラインをSlackへ送信しました（${messages}メッセージ）`,
     noChanges: "データに変更がないため、新しいメッセージは送信されませんでした。",
@@ -259,6 +271,47 @@ export function ExportList() {
     }
   }
 
+  async function downloadExcel(config: ExportConfig) {
+    const busyKey = `${config.id}:excel`;
+    setActionBusy(busyKey);
+    setFeedback((current) => {
+      const next = { ...current };
+      delete next[config.id];
+      return next;
+    });
+    try {
+      const response = await fetch(`/api/exports/${config.id}/excel`);
+      if (!response.ok) {
+        const result = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(result.error || "EXCEL_EXPORT_FAILED");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(disposition);
+      const filename = decodeURIComponent(match?.[1] || match?.[2] || `${config.name}.xlsx`);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setFeedback((current) => ({
+        ...current,
+        [config.id]: { ok: true, text: runCopy.downloadOk },
+      }));
+      await load();
+    } catch {
+      setFeedback((current) => ({
+        ...current,
+        [config.id]: { ok: false, text: runCopy.downloadFailed },
+      }));
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
   return (
     <div className="console-page export-page">
       <header className="export-page-head">
@@ -361,6 +414,17 @@ export function ExportList() {
                                 {actionBusy === `${config.id}:run` ? runCopy.sending : runCopy.send}
                               </button>
                             </>
+                          ) : null}
+                          {config.destinationType === "excel" && config.status === "ready" ? (
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              disabled={Boolean(actionBusy)}
+                              onClick={() => void downloadExcel(config)}
+                            >
+                              <FiDownload size={15} />
+                              {actionBusy === `${config.id}:excel` ? runCopy.downloadingExcel : runCopy.downloadExcel}
+                            </button>
                           ) : null}
                           <Link href={`/settings/exports/${config.id}`} className="btn-icon" title={copy.edit} aria-label={copy.edit}>
                             <FiEdit2 size={16} />

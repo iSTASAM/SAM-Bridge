@@ -74,9 +74,9 @@ const POWER_BI_SAVE_COPY = {
 } as const;
 
 const EXCEL_COPY = {
-  th: { modelTitle: "เลือกข้อมูลสำหรับ Excel", modelHelp: "ข้อมูลจะถูกโหลดเข้า Excel Table ผ่าน Power Query โดยไม่แก้ Form หรือ Macro เดิม", setupTitle: "การเชื่อมต่อ Microsoft Excel", setupHelp: "ใช้ได้กับไฟล์ .xlsx และ .xlsm ผ่าน Power Query", method: "วิธีรับข้อมูล", methodValue: "Power Query (Web API)", refresh: "Refresh อัตโนมัติ", credentials: "การยืนยันตัวตน", credentialsValue: "Bearer API key แยกสำหรับ Export นี้", refreshTitle: "รอบการอัปเดตใน Excel", minutes: "นาที", workbookNote: "Excel ต้องเปิดอยู่จึงจะ Refresh ตามรอบได้", chooseDataset: "เลือกตาราง Excel อย่างน้อย 1 ตาราง", save: "บันทึกและเปิดใช้งาน Excel", saving: "กำลังเปิดใช้งาน…", api: "Excel API", query: "Power Query (M)", copyQuery: "คัดลอก Power Query", copyVba: "คัดลอก VBA AutoRefresh", install: "วางโค้ดใน Excel → Data → Get Data → Blank Query → Advanced Editor แล้วเลือก Close & Load To… เพื่อโหลดลงชีตข้อมูล", tableName: "ชื่อตารางใน Excel", model: "Excel Power Query tables", selectTables: "เลือกตารางที่จะใช้", historyTable: "ข้อมูลย้อนหลังถึงปัจจุบัน", historyHelp: "ข้อมูลรายวันตามช่วงย้อนหลังที่เลือก", currentTable: "ข้อมูลปัจจุบัน", currentHelp: "Snapshot ล่าสุดเหมือนหน้า Realtime ทุกครั้งที่ Refresh", autoRefresh: "เปิด AutoRefresh ขณะ Excel เปิดอยู่" },
-  en: { modelTitle: "Choose data for Excel", modelHelp: "Data loads into Excel tables through Power Query without changing existing forms or macros.", setupTitle: "Microsoft Excel connection", setupHelp: "Works with .xlsx and .xlsm workbooks through Power Query.", method: "Data access", methodValue: "Power Query (Web API)", refresh: "Automatic refresh", credentials: "Authentication", credentialsValue: "A dedicated Bearer API key for this export", refreshTitle: "Excel refresh interval", minutes: "minutes", workbookNote: "The workbook must be open for interval refresh.", chooseDataset: "Choose at least one Excel table", save: "Save and enable Excel", saving: "Enabling…", api: "Excel API", query: "Power Query (M)", copyQuery: "Copy Power Query", copyVba: "Copy AutoRefresh VBA", install: "In Excel, open Data → Get Data → Blank Query → Advanced Editor, paste the code, then use Close & Load To…", tableName: "Excel table name", model: "Excel Power Query tables", selectTables: "Choose Excel tables", historyTable: "History through today", historyHelp: "Daily records for the selected history window.", currentTable: "Current production", currentHelp: "Latest snapshot matching the Realtime page on every refresh.", autoRefresh: "Enable AutoRefresh while Excel is open" },
-  ja: { modelTitle: "Excel用データを選択", modelHelp: "既存のフォームやマクロを変更せず、Power QueryでExcel Tableに読み込みます。", setupTitle: "Microsoft Excel接続", setupHelp: ".xlsxと.xlsmをPower Queryで接続できます。", method: "データ取得", methodValue: "Power Query (Web API)", refresh: "自動更新", credentials: "認証", credentialsValue: "Export専用Bearer API key", refreshTitle: "Excel更新間隔", minutes: "分", workbookNote: "定期更新にはExcelを開いておく必要があります。", chooseDataset: "Excelテーブルを1つ以上選択してください", save: "保存してExcelを有効化", saving: "有効化中…", api: "Excel API", query: "Power Query (M)", copyQuery: "Power Queryをコピー", copyVba: "AutoRefresh VBAをコピー", install: "Excelの Data → Get Data → Blank Query → Advanced Editor に貼り付け、Close & Load To…を選択します。", tableName: "Excelテーブル名", model: "Excel Power Query tables", selectTables: "Excelテーブルを選択", historyTable: "履歴から現在まで", historyHelp: "選択した期間の日次データ。", currentTable: "現在の生産データ", currentHelp: "更新時にRealtime画面と同じ最新Snapshotを取得。", autoRefresh: "Excelを開いている間AutoRefreshを有効化" },
+  th: { modelTitle: "เลือกข้อมูลสำหรับ Excel", modelHelp: "ดาวน์โหลดเป็นไฟล์ .xlsx ได้ทันที หรือเชื่อมต่อผ่าน Power Query เพื่อ Refresh ใน workbook เดิม", setupTitle: "การเชื่อมต่อ Microsoft Excel", setupHelp: "ดาวน์โหลดไฟล์ .xlsx ได้จากหน้านี้ และใช้ได้กับไฟล์ .xlsx / .xlsm ผ่าน Power Query", method: "วิธีรับข้อมูล", methodValue: "ดาวน์โหลด .xlsx และ Power Query (Web API)", refresh: "Refresh อัตโนมัติ", credentials: "การยืนยันตัวตน", credentialsValue: "Bearer API key แยกสำหรับ Export นี้", refreshTitle: "รอบการอัปเดตใน Excel", minutes: "นาที", workbookNote: "Excel ต้องเปิดอยู่จึงจะ Refresh ตามรอบได้", chooseDataset: "เลือกตาราง Excel อย่างน้อย 1 ตาราง", save: "บันทึกและเปิดใช้งาน Excel", saving: "กำลังเปิดใช้งาน…", api: "Excel API", query: "Power Query (M)", copyQuery: "คัดลอก Power Query", copyVba: "คัดลอก VBA AutoRefresh", download: "ดาวน์โหลดไฟล์ Excel", downloading: "กำลังสร้างไฟล์…", downloadFail: "สร้างไฟล์ Excel ไม่สำเร็จ", install: "หรือวางโค้ดใน Excel → Data → Get Data → Blank Query → Advanced Editor แล้วเลือก Close & Load To… เพื่อโหลดลงชีตข้อมูล", tableName: "ชื่อตารางใน Excel", model: "Excel workbook (.xlsx)", selectTables: "เลือกตารางที่จะใช้", historyTable: "ข้อมูลย้อนหลังถึงปัจจุบัน", historyHelp: "ข้อมูลรายวันตามช่วงย้อนหลังที่เลือก", currentTable: "ข้อมูลปัจจุบัน", currentHelp: "Snapshot ล่าสุดเหมือนหน้า Realtime ทุกครั้งที่ Refresh", autoRefresh: "เปิด AutoRefresh ขณะ Excel เปิดอยู่" },
+  en: { modelTitle: "Choose data for Excel", modelHelp: "Download a .xlsx file immediately, or connect through Power Query to refresh an existing workbook.", setupTitle: "Microsoft Excel connection", setupHelp: "Download a .xlsx file here, or refresh .xlsx / .xlsm workbooks through Power Query.", method: "Data access", methodValue: ".xlsx download and Power Query (Web API)", refresh: "Automatic refresh", credentials: "Authentication", credentialsValue: "A dedicated Bearer API key for this export", refreshTitle: "Excel refresh interval", minutes: "minutes", workbookNote: "The workbook must be open for interval refresh.", chooseDataset: "Choose at least one Excel table", save: "Save and enable Excel", saving: "Enabling…", api: "Excel API", query: "Power Query (M)", copyQuery: "Copy Power Query", copyVba: "Copy AutoRefresh VBA", download: "Download Excel file", downloading: "Building file…", downloadFail: "Could not build the Excel file", install: "Or in Excel, open Data → Get Data → Blank Query → Advanced Editor, paste the code, then use Close & Load To…", tableName: "Excel table name", model: "Excel workbook (.xlsx)", selectTables: "Choose Excel tables", historyTable: "History through today", historyHelp: "Daily records for the selected history window.", currentTable: "Current production", currentHelp: "Latest snapshot matching the Realtime page on every refresh.", autoRefresh: "Enable AutoRefresh while Excel is open" },
+  ja: { modelTitle: "Excel用データを選択", modelHelp: ".xlsxをすぐにダウンロードするか、Power Queryで既存ブックを更新できます。", setupTitle: "Microsoft Excel接続", setupHelp: "ここで.xlsxをダウンロードするか、Power Queryで.xlsx/.xlsmを更新できます。", method: "データ取得", methodValue: ".xlsxダウンロードとPower Query (Web API)", refresh: "自動更新", credentials: "認証", credentialsValue: "Export専用Bearer API key", refreshTitle: "Excel更新間隔", minutes: "分", workbookNote: "定期更新にはExcelを開いておく必要があります。", chooseDataset: "Excelテーブルを1つ以上選択してください", save: "保存してExcelを有効化", saving: "有効化中…", api: "Excel API", query: "Power Query (M)", copyQuery: "Power Queryをコピー", copyVba: "AutoRefresh VBAをコピー", download: "Excelファイルをダウンロード", downloading: "ファイル作成中…", downloadFail: "Excelファイルを作成できませんでした", install: "または Excelの Data → Get Data → Blank Query → Advanced Editor に貼り付け、Close & Load To…を選択します。", tableName: "Excelテーブル名", model: "Excel workbook (.xlsx)", selectTables: "Excelテーブルを選択", historyTable: "履歴から現在まで", historyHelp: "選択した期間の日次データ。", currentTable: "現在の生産データ", currentHelp: "更新時にRealtime画面と同じ最新Snapshotを取得。", autoRefresh: "Excelを開いている間AutoRefreshを有効化" },
 } as const;
 
 const SLACK_COPY = {
@@ -273,7 +273,7 @@ function inferPreset(fields: string[]): DataPreset {
   return "custom";
 }
 
-export function ExportWizard({ configId }: { configId?: string } = {}) {
+export function ExportWizard({ configId, publicUrl = "https://sam-bridge.vercel.app" }: { configId?: string; publicUrl?: string } = {}) {
   const { locale } = useLocale();
   const copy = EXPORT_COPY[locale];
   const wizard = WIZARD_COPY[locale];
@@ -900,6 +900,7 @@ export function ExportWizard({ configId }: { configId?: string } = {}) {
               copy={copy}
               locale={locale}
               configId={configId}
+              publicUrl={publicUrl}
               wizard={wizard}
               form={form}
               preset={preset}
@@ -1845,6 +1846,7 @@ function ReviewStep({
   copy,
   locale,
   configId,
+  publicUrl,
   wizard,
   form,
   preset,
@@ -1865,6 +1867,7 @@ function ReviewStep({
   copy: (typeof EXPORT_COPY)[keyof typeof EXPORT_COPY];
   locale: keyof typeof POWER_BI_COPY;
   configId?: string;
+  publicUrl: string;
   wizard: WizardCopy;
   form: DraftForm;
   preset: DataPreset;
@@ -1882,6 +1885,8 @@ function ReviewStep({
   onPreview: () => void;
   onSend: () => void;
 }) {
+  const [excelBusy, setExcelBusy] = useState(false);
+  const [excelNotice, setExcelNotice] = useState<string | null>(null);
   const isSap = form.destinationType === "sap-odata";
   const isPowerBi = form.destinationType === "power-bi";
   const isExcel = form.destinationType === "excel";
@@ -1890,8 +1895,38 @@ function ReviewStep({
   const excelCopy = EXCEL_COPY[locale];
   const powerBiPath = configId ? `/api/power-bi/exports/${configId}` : "";
   const excelPath = configId ? `/api/excel/exports/${configId}` : "";
+  const baseUrl = publicUrl.replace(/\/+$/, "") || "https://sam-bridge.vercel.app";
+
+  async function downloadExcelFile() {
+    if (!configId) return;
+    setExcelBusy(true);
+    setExcelNotice(null);
+    try {
+      const response = await fetch(`/api/exports/${configId}/excel`);
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error || "EXCEL_EXPORT_FAILED");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(disposition);
+      const filename = decodeURIComponent(match?.[1] || match?.[2] || `${form.name || "SAM-export"}.xlsx`);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExcelNotice(excelCopy.downloadFail);
+    } finally {
+      setExcelBusy(false);
+    }
+  }
   const powerQuery = configId ? `let
-  BaseUrl = "https://YOUR-SAM-HOST",
+  BaseUrl = "${baseUrl}",
   ApiPath = "api/power-bi/exports/${configId}",
   ApiKey = "${form.powerBiApiKey}",
   TableName = "production",
@@ -1916,7 +1951,7 @@ function ReviewStep({
 in
   Data` : "";
   const excelCurrentQuery = configId ? `let
-  BaseUrl = "https://YOUR-SAM-HOST",
+  BaseUrl = "${baseUrl}",
   RefreshToken = DateTimeZone.ToText(DateTimeZone.FixedUtcNow(), "yyyyMMddHHmmssfff"),
   Source = Json.Document(Web.Contents(BaseUrl, [
     RelativePath = "api/excel/exports/${configId}",
@@ -1947,7 +1982,7 @@ Public Sub StopSAMAutoRefresh()
     Application.OnTime SAMNextRefresh, "RefreshSAMData", , False
 End Sub`;
   const excelQuery = configId ? `let
-  BaseUrl = "https://YOUR-SAM-HOST",
+  BaseUrl = "${baseUrl}",
   ApiPath = "api/excel/exports/${configId}",
   ApiKey = "${form.excelApiKey}",
   TableName = "production",
@@ -2189,12 +2224,18 @@ in
             <p className="ew-label">Power Query (M)</p>
             <pre>{powerQuery}</pre>
           </div>
-          <p className="ew-muted">เปลี่ยน YOUR-SAM-HOST เป็น Domain ของระบบ แล้ววางโค้ดใน Power BI Desktop → Get data → Blank query → Advanced Editor หากต้องการ Lost Time ให้เปลี่ยน table=production เป็น table=lost-time</p>
+          <p className="ew-muted">วางโค้ดใน Power BI Desktop → Get data → Blank query → Advanced Editor หากต้องการ Lost Time ให้เปลี่ยน table=production เป็น table=lost-time</p>
           <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(powerQuery)}>คัดลอก Power Query</button>
         </section>
       ) : null}
       {isExcel && configId ? (
         <section className="ew-bi-connect">
+          <div className="ew-bar-actions">
+            <button type="button" className="btn btn-primary" disabled={excelBusy} onClick={() => void downloadExcelFile()}>
+              {excelBusy ? excelCopy.downloading : excelCopy.download}
+            </button>
+          </div>
+          {excelNotice ? <p className="ew-muted">{excelNotice}</p> : null}
           <div><p className="ew-label">{excelCopy.api}</p><code>{excelPath}</code></div>
           <div><p className="ew-label">Bearer API key</p><code>{form.excelApiKey}</code></div>
           <div><p className="ew-label">{excelCopy.tableName}</p><code>{form.excelSettings.tables.map((table) => table === "history" ? "tblSAMProduction" : "tblSAMCurrent").join(" · ")}</code></div>
@@ -2203,8 +2244,8 @@ in
           <p className="ew-muted">{excelCopy.install}</p>
           {form.excelSettings.autoRefresh ? <p className="ew-muted">สำหรับ .xlsm ให้วาง VBA ใน Standard Module แล้วเรียก StartSAMAutoRefresh หนึ่งครั้ง ระบบจะ RefreshAll ทุก {form.excelSettings.refreshMinutes} นาทีขณะเปิด Excel และดึง tblSAMCurrent ใหม่เหมือนหน้า Realtime</p> : null}
           <div className="ew-bar-actions">
-            {form.excelSettings.tables.includes("history") ? <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(excelQuery.replace("https://YOUR-SAM-HOST", window.location.origin))}>{excelCopy.copyQuery} · History</button> : null}
-            {form.excelSettings.tables.includes("current") ? <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(excelCurrentQuery.replace("https://YOUR-SAM-HOST", window.location.origin))}>{excelCopy.copyQuery} · Current</button> : null}
+            {form.excelSettings.tables.includes("history") ? <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(excelQuery)}>{excelCopy.copyQuery} · History</button> : null}
+            {form.excelSettings.tables.includes("current") ? <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(excelCurrentQuery)}>{excelCopy.copyQuery} · Current</button> : null}
             {form.excelSettings.autoRefresh ? <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(excelVba)}>{excelCopy.copyVba}</button> : null}
           </div>
         </section>

@@ -1,5 +1,6 @@
 import { ExportWizard } from "../export-wizard";
 
 export default function NewExportPage() {
-  return <ExportWizard />;
+  const publicUrl = (process.env.LINE_PUBLIC_URL ?? "").trim().replace(/\/+$/, "") || "https://sam-bridge.vercel.app";
+  return <ExportWizard publicUrl={publicUrl} />;
 }

@@ -428,12 +428,203 @@
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 0;
   min-height: calc(56px + env(safe-area-inset-bottom, 0px));
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border);
   background: var(--bg);
+}
+
+.notificationLayout {
+  display: grid;
+  gap: 20px;
+}
+
+.notificationTitleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.notificationIcon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: color-mix(in srgb, #06c755 12%, var(--bg-elevated));
+  color: #049a42;
+}
+
+.notificationTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.notificationLead {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.notificationForm {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 38px 0 12px;
+  border: 1px solid var(--border-input);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.field small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.primaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryAction:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.formError {
+  margin: 12px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.ruleList {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ruleCard {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.ruleDisabled {
+  opacity: 0.62;
+}
+
+.ruleMain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ruleDot {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.ruleMain div {
+  min-width: 0;
+}
+
+.ruleMain strong,
+.ruleMain span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ruleMain strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ruleMain span {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.ruleActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ruleToggle,
+.ruleDelete {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.ruleToggle {
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ruleToggle[aria-pressed="true"] {
+  border-color: color-mix(in srgb, #06c755 28%, var(--border));
+  background: color-mix(in srgb, #06c755 9%, var(--bg-elevated));
+  color: #049a42;
+}
+
+.ruleDelete {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  padding: 0;
+}
+
+.ruleDelete:hover {
+  color: var(--danger);
 }
 
 .navItem {

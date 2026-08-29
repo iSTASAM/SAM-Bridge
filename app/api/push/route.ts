@@ -6,6 +6,7 @@ import {
   rememberPushBatch,
 } from "@/lib/ixacs-store";
 import { dispatchPushNotifications } from "@/lib/notification-runner";
+import { dispatchLineNotificationEvents } from "@/lib/line-notification-runner";
 
 function headersToObject(headers: Headers) {
   const obj: Record<string, string> = {};
@@ -120,7 +121,15 @@ async function handle(request: NextRequest, method: string) {
     }
     const stored = await rememberPushBatch(body.parsed, session, request.headers.get("x-api-key"));
     if (stored.acceptedEvents.length > 0) {
-      await dispatchPushNotifications(stored.acceptedEvents);
+      const notificationResults = await Promise.allSettled([
+        dispatchPushNotifications(stored.acceptedEvents),
+        dispatchLineNotificationEvents(stored.acceptedEvents),
+      ]);
+      for (const result of notificationResults) {
+        if (result.status === "rejected") {
+          console.error("Notification dispatch failed:", result.reason);
+        }
+      }
     }
     const { acceptedEvents: _acceptedEvents, ...storedResult } = stored;
     void _acceptedEvents;

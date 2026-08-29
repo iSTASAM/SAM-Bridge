@@ -3,11 +3,12 @@
 import { startTransition, useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FiHome, FiLogOut, FiUser, FiX } from "react-icons/fi";
+import { FiBell, FiHome, FiLogOut, FiUser, FiX } from "react-icons/fi";
 import { LanguageMenu } from "@/app/language-menu";
 import { useLocale, type Locale } from "@/app/locale-context";
 import { ThemeMenu } from "@/app/theme-menu";
 import styles from "./line-portal.module.css";
+import { LineNotificationSettings } from "./line-notification-settings";
 
 type Group = { uuid: string; name: string; lines: Array<{ uuid: string; name: string }> };
 
@@ -43,7 +44,7 @@ export type LineStatusRow = {
 };
 
 export type LinePortalProps = {
-  page: "home" | "account";
+  page: "home" | "notifications" | "account";
   connectionId: string;
   user: { displayName: string; customerCompanyId: string; loginId: string };
   lineProfile: { displayName: string; pictureUrl: string | null } | null;
@@ -70,6 +71,7 @@ const COPY = {
     accountNote: "บัญชีนี้ใช้สำหรับพอร์ทัล LINE และแยกจาก session ของ Web Application",
     home: "หน้าหลัก",
     profile: "บัญชี",
+    notifications: "แจ้งเตือน",
     logout: "ออกจากระบบ",
     nav: "เมนู",
     changeStatus: "เปลี่ยนสถานะ",
@@ -98,6 +100,7 @@ const COPY = {
     accountNote: "This account is for the LINE portal and is separate from the web app session.",
     home: "Home",
     profile: "Account",
+    notifications: "Alerts",
     logout: "Log out",
     nav: "Menu",
     changeStatus: "Change status",
@@ -126,6 +129,7 @@ const COPY = {
     accountNote: "このアカウントは LINE ポータル用で、Web アプリのセッションとは分離されています。",
     home: "ホーム",
     profile: "アカウント",
+    notifications: "通知",
     logout: "ログアウト",
     nav: "メニュー",
     changeStatus: "ステータス変更",
@@ -668,6 +672,8 @@ export function LinePortal({
             <div className={styles.notice}>{copy.accountNote}</div>
           </>
         ) : null}
+
+        {page === "notifications" ? <LineNotificationSettings lines={lines} /> : null}
       </main>
 
       <nav className={styles.nav} aria-label={copy.nav}>
@@ -678,6 +684,14 @@ export function LinePortal({
         >
           <FiHome size={18} aria-hidden />
           <span>{copy.home}</span>
+        </Link>
+        <Link
+          href="/line/notifications"
+          className={`${styles.navItem} ${page === "notifications" ? styles.active : ""}`}
+          aria-current={page === "notifications" ? "page" : undefined}
+        >
+          <FiBell size={18} aria-hidden />
+          <span>{copy.notifications}</span>
         </Link>
         <Link
           href="/line/account"

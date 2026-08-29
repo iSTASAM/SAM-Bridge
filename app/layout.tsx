@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Chakra_Petch, Noto_Sans_JP, Prompt } from "next/font/google";
 import { Providers } from "./providers";
+import { SIDEBAR_BOOTSTRAP_SCRIPT } from "./sidebar-pref";
 import { THEME_BOOTSTRAP_SCRIPT } from "./theme";
 import "./globals.css";
 
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: SIDEBAR_BOOTSTRAP_SCRIPT }} />
       </head>
       <body className="h-full">
         <Providers>{children}</Providers>

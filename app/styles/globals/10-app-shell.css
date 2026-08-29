@@ -78,34 +78,34 @@
   color: var(--text-primary);
 }
 
-.app-shell.is-sidebar-hidden .app-sidebar {
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar {
   width: 72px;
   padding-left: 10px;
   padding-right: 10px;
 }
 
-.app-shell.is-sidebar-hidden .app-sidebar-head {
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-head {
   justify-content: center;
 }
 
-.app-shell.is-sidebar-hidden .app-sidebar-brand,
-.app-shell.is-sidebar-hidden .app-nav-label,
-.app-shell.is-sidebar-hidden .app-sidebar-user-copy {
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-brand,
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-label,
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-user-copy {
   display: none;
 }
 
-.app-shell.is-sidebar-hidden .app-nav-item {
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-item {
   justify-content: center;
   gap: 0;
   padding: 10px;
 }
 
-.app-shell.is-sidebar-hidden .app-sidebar-foot {
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-foot {
   flex-direction: column;
   justify-content: center;
 }
 
-.app-shell.is-sidebar-hidden .app-sidebar-user {
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-user {
   justify-content: center;
 }
 
@@ -349,7 +349,7 @@
     transition: transform 180ms ease;
   }
 
-  .app-shell.is-sidebar-hidden .app-sidebar {
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar {
     width: 280px;
     padding: 18px 16px 20px;
     opacity: 1;
@@ -358,28 +358,28 @@
     border-right: 1px solid var(--border);
   }
 
-  .app-shell.is-sidebar-hidden .app-sidebar-head {
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-head {
     justify-content: space-between;
   }
 
-  .app-shell.is-sidebar-hidden .app-sidebar-brand,
-  .app-shell.is-sidebar-hidden .app-nav-label,
-  .app-shell.is-sidebar-hidden .app-sidebar-user-copy {
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-brand,
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-label,
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-user-copy {
     display: unset;
   }
 
-  .app-shell.is-sidebar-hidden .app-nav-item {
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-item {
     justify-content: flex-start;
     gap: 10px;
     padding: 10px 12px;
   }
 
-  .app-shell.is-sidebar-hidden .app-sidebar-foot {
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-foot {
     flex-direction: row;
     justify-content: space-between;
   }
 
-  .app-shell.is-sidebar-hidden .app-sidebar-user {
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-user {
     justify-content: flex-start;
   }
 

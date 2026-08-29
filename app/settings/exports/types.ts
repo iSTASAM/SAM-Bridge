@@ -259,7 +259,7 @@ export const WIZARD_DESTINATIONS: Record<
   teams: { name: "Microsoft Teams", description: "Post updates to a Teams workflow" },
   slack: { name: "Slack", description: "Post updates to a Slack channel" },
   "power-bi": { name: "Power BI", description: "Prepare a dataset for reporting" },
-  excel: { name: "Microsoft Excel", description: "Refresh iXacs data with Power Query" },
+  excel: { name: "Microsoft Excel", description: "Download .xlsx or refresh with Power Query" },
   "data-warehouse": { name: "Data Warehouse", description: "Load normalized historical data" },
 };
 
@@ -281,6 +281,6 @@ export const DESTINATIONS: {
   { id: "teams", name: "Microsoft Teams", description: "Post updates to a Teams workflow", endpointLabel: "Workflow URL / channel", placeholder: "Production team" },
   { id: "slack", name: "Slack", description: "Post updates to a Slack channel", endpointLabel: "Slack Incoming Webhook URL", placeholder: "https://hooks.slack.com/services/..." },
   { id: "power-bi", name: "Power BI", description: "Prepare a dataset for reporting", endpointLabel: "Workspace / dataset", placeholder: "Factory Operations / iXacs" },
-  { id: "excel", name: "Microsoft Excel", description: "Refresh data in an existing .xlsx or .xlsm workbook", endpointLabel: "Workbook", placeholder: "Production report.xlsm" },
+  { id: "excel", name: "Microsoft Excel", description: "Download a .xlsx file or refresh an existing workbook", endpointLabel: "Workbook", placeholder: "Production report.xlsm" },
   { id: "data-warehouse", name: "Data Warehouse", description: "Load normalized historical data", endpointLabel: "Warehouse / dataset", placeholder: "operations.ixacs_production" },
 ];

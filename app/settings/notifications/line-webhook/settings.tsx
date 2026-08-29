@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { FiArrowLeft, FiCheck, FiCopy, FiExternalLink, FiSave } from "react-icons/fi";
+import { FiArrowLeft, FiCheck, FiCopy, FiSave } from "react-icons/fi";
 import { useLocale } from "@/app/locale-context";
 import { LINE_WEBHOOK_COPY } from "./copy";
 
@@ -112,22 +112,6 @@ export function LineWebhookSettings() {
     }
   }
 
-  const ready = Boolean(
-    settings?.channelSecretConfigured &&
-      settings.channelAccessTokenConfigured &&
-      settings.liffId &&
-      settings.lineLoginChannelId,
-  );
-
-  const storageLabel =
-    settings?.storage === "supabase"
-      ? copy.storageSupabase
-      : settings?.storage === "env"
-        ? copy.storageEnv
-        : settings?.storage === "mixed"
-          ? copy.storageMixed
-          : copy.storageFile;
-
   return (
     <div className="console-page lw-page">
       <header className="lw-head">
@@ -136,25 +120,8 @@ export function LineWebhookSettings() {
             <FiArrowLeft size={15} aria-hidden />
             {copy.backToList}
           </Link>
-          <div className="lw-title-row">
-            <h1 className="console-title">{copy.title}</h1>
-            {!loading ? (
-              <span className={`lw-badge ${ready ? "is-ready" : ""}`}>
-                {ready ? copy.statusReady : copy.statusEmpty}
-              </span>
-            ) : null}
-          </div>
-          <p className="lw-hint">{copy.hint}</p>
+          <h1 className="console-title">{copy.title}</h1>
         </div>
-        <a
-          className="btn btn-secondary"
-          href="https://developers.line.biz/console/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <FiExternalLink size={15} />
-          {copy.openConsole}
-        </a>
       </header>
 
       {loading ? (
@@ -169,9 +136,7 @@ export function LineWebhookSettings() {
             <p className="lw-message" role="alert">
               {copy.needSupabase}
             </p>
-          ) : (
-            <p className="lw-storage">{storageLabel}</p>
-          )}
+          ) : null}
 
           <label className="machine-field">
             <span className="machine-label">{copy.publicUrl}</span>
@@ -196,7 +161,6 @@ export function LineWebhookSettings() {
               value={channelSecret}
               onChange={(event) => setChannelSecret(event.target.value)}
             />
-            <span className="machine-help">{copy.channelSecretHint}</span>
           </label>
 
           <label className="machine-field">
@@ -213,7 +177,6 @@ export function LineWebhookSettings() {
               value={channelAccessToken}
               onChange={(event) => setChannelAccessToken(event.target.value)}
             />
-            <span className="machine-help">{copy.channelAccessTokenHint}</span>
           </label>
 
           <label className="machine-field">

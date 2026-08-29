@@ -18,8 +18,7 @@ import {
 import { OpenAIIcon } from "./flow/ai-icons";
 import { useLocale } from "./locale-context";
 import { AppToolbar } from "./app-toolbar";
-
-const STORAGE_KEY = "ixacs-sidebar-hidden";
+import { SIDEBAR_HIDDEN_STORAGE_KEY } from "./sidebar-pref";
 
 const COPY = {
   th: {
@@ -85,18 +84,25 @@ function active(pathname: string, href: string, exact: boolean) {
 
 function readHidden() {
   try {
-    return window.localStorage.getItem(STORAGE_KEY) === "1";
+    return window.localStorage.getItem(SIDEBAR_HIDDEN_STORAGE_KEY) === "1";
   } catch {
     return false;
   }
 }
 
+function applyHiddenAttr(hidden: boolean) {
+  if (typeof document === "undefined") return;
+  if (hidden) document.documentElement.setAttribute("data-sidebar-hidden", "1");
+  else document.documentElement.removeAttribute("data-sidebar-hidden");
+}
+
 function writeHidden(hidden: boolean) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, hidden ? "1" : "0");
+    window.localStorage.setItem(SIDEBAR_HIDDEN_STORAGE_KEY, hidden ? "1" : "0");
   } catch {
     /* ignore */
   }
+  applyHiddenAttr(hidden);
 }
 
 export function AppSidebar({
@@ -251,11 +257,11 @@ export function SidebarShowButton({ onShow }: { onShow: () => void }) {
 
 export function useSidebarHiddenState() {
   const [hidden, setHidden] = useState(false);
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setHidden(readHidden());
-    setReady(true);
+    const value = readHidden();
+    setHidden(value);
+    applyHiddenAttr(value);
   }, []);
 
   function hide() {
@@ -268,5 +274,5 @@ export function useSidebarHiddenState() {
     writeHidden(false);
   }
 
-  return { hidden: ready ? hidden : false, hide, show };
+  return { hidden, hide, show };
 }

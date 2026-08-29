@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { FiCheck, FiCopy, FiExternalLink, FiKey, FiRefreshCw } from "react-icons/fi";
 import { useLocale } from "@/app/locale-context";
 import "@/app/styles/globals/68-gpt-actions.css";
@@ -19,98 +19,71 @@ const COPY = {
   th: {
     title: "GPT Actions",
     endpoint: "Public URL",
-    endpointHint: "URL สาธารณะที่ ChatGPT เข้าถึง SAM Bridge ได้ (เช่น ngrok)",
     schema: "OpenAPI Schema URL",
     privacy: "Privacy Policy URL",
     copy: "คัดลอก",
     copied: "คัดลอกแล้ว",
     keyTitle: "API key",
-    keyLead: "ChatGPT ส่ง key นี้แบบ Bearer ทุกครั้งที่อ่านข้อมูล iXacs",
     createKey: "สร้าง API key",
     rotateKey: "หมุนเปลี่ยน key",
     envKey: "ควบคุมโดย GPT_ACTION_API_KEY ใน environment",
     oneTime: "คัดลอกตอนนี้ — หลังออกจากหน้านี้จะไม่สามารถดู key เต็มได้อีก",
     rotateConfirm: "API key เดิมจะใช้งานไม่ได้ทันที ต้องการหมุนเปลี่ยน key หรือไม่?",
     companies: "บริษัทที่อนุญาต",
-    companiesLead: "ถ้าไม่เลือก ระบบจะอนุญาตทุกบริษัท การเลือกเฉพาะบริษัทช่วยลดขอบเขตข้อมูลที่ GPT เข้าถึงได้",
     allCompanies: "ทุกบริษัท",
     save: "บันทึกสิทธิ์",
     saved: "บันทึกแล้ว",
-    setup: "ตั้งค่าใน MyGPT",
-    step1: "เปิด Configure → Actions → Create new action",
-    step2: "Import จาก OpenAPI Schema URL ด้านบน",
-    step3: "Authentication เลือก API key → Bearer แล้ววาง key",
-    step4: "ทดสอบ listCompanies, getProductionData และ getLostTime ใน Preview",
     prompt: "Instructions แนะนำ",
     promptText: "เมื่อผู้ใช้ถามข้อมูล iXacs ให้เรียก listCompanies หากยังไม่ทราบ companyId ใช้ getProductionData สำหรับผลผลิต/Cycle Time/สถานะ และ getLostTime สำหรับเวลาสูญเสีย ถ้าต้องวิเคราะห์ร่วมกันให้เรียกทั้งสอง Action ด้วย companyId และช่วงวันที่เดียวกัน ตรวจ period, warnings และ dataQuality ก่อนวิเคราะห์ ระบุช่วงวันที่จริงและหน่วยทุกครั้ง ผลหลายวันเป็นยอดรวมทั้งช่วง ไม่ใช่ข้อมูลรายวัน จึงห้ามสรุปแนวโน้มรายวันจากผลรวม หากต้องการแนวโน้มรายวันให้เรียก mode=day แยกแต่ละวันที่ต้องเปรียบเทียบ ห้ามคาดเดาตัวเลขที่ไม่มีใน API และตอบภาษาเดียวกับผู้ใช้",
     openPolicy: "เปิดนโยบายความเป็นส่วนตัว",
     noCompanies: "ยังไม่มี iXacs connection กรุณาสร้างที่เมนู iXacs ก่อน",
     loadError: "โหลดการตั้งค่าไม่สำเร็จ",
-    httpsUrl: "HTTPS URL",
   },
   en: {
     title: "GPT Actions",
     endpoint: "Public URL",
-    endpointHint: "Public URL where ChatGPT can reach SAM Bridge (e.g. ngrok)",
     schema: "OpenAPI Schema URL",
     privacy: "Privacy Policy URL",
     copy: "Copy",
     copied: "Copied",
     keyTitle: "API key",
-    keyLead: "ChatGPT sends this key as a Bearer token whenever it reads iXacs data.",
     createKey: "Create API key",
     rotateKey: "Rotate key",
     envKey: "Managed by GPT_ACTION_API_KEY in the environment",
     oneTime: "Copy it now — the full key cannot be viewed again after leaving this page.",
     rotateConfirm: "The old API key will stop working immediately. Rotate it?",
     companies: "Allowed companies",
-    companiesLead: "Leaving all unchecked allows every company. Selecting companies narrows the data this GPT can access.",
     allCompanies: "All companies",
     save: "Save access",
     saved: "Saved",
-    setup: "Set up in MyGPT",
-    step1: "Open Configure → Actions → Create new action",
-    step2: "Import the OpenAPI Schema URL above",
-    step3: "Choose API key → Bearer authentication and paste the key",
-    step4: "Test listCompanies, getProductionData, and getLostTime in Preview",
     prompt: "Suggested instructions",
     promptText: "For iXacs questions, call listCompanies when companyId is unknown. Use getProductionData for output, cycle time, and status; use getLostTime for downtime. For combined analysis, call both with the same companyId and date parameters. Check period, warnings, and dataQuality before analyzing; always state the effective date range and units. Multi-day results are totals for the whole period, not daily observations, so never infer daily trends from aggregates. For a daily trend, call mode=day separately for every date being compared. Never invent numbers absent from the API, and answer in the user's language.",
     openPolicy: "Open privacy policy",
     noCompanies: "No iXacs connection yet. Create one from the iXacs menu first.",
     loadError: "Could not load settings",
-    httpsUrl: "HTTPS URL",
   },
   ja: {
     title: "GPT Actions",
     endpoint: "公開 URL",
-    endpointHint: "ChatGPT から SAM Bridge に到達できる公開 URL（ngrok など）",
     schema: "OpenAPI Schema URL",
     privacy: "Privacy Policy URL",
     copy: "コピー",
     copied: "コピー済み",
     keyTitle: "API key",
-    keyLead: "ChatGPT は iXacs データ取得時に Bearer key を送信します。",
     createKey: "API key を作成",
     rotateKey: "key を更新",
     envKey: "環境変数 GPT_ACTION_API_KEY で管理されています",
     oneTime: "今すぐコピーしてください。この画面を離れると完全な key は再表示できません。",
     rotateConfirm: "古い API key は直ちに無効になります。更新しますか？",
     companies: "許可する会社",
-    companiesLead: "未選択の場合は全会社を許可します。会社を選ぶと GPT のアクセス範囲を限定できます。",
     allCompanies: "全会社",
     save: "権限を保存",
     saved: "保存済み",
-    setup: "MyGPT で設定",
-    step1: "Configure → Actions → Create new action を開く",
-    step2: "上記 OpenAPI Schema URL から Import",
-    step3: "Authentication で API key → Bearer を選び key を貼り付ける",
-    step4: "Preview で3つの Action をテスト",
     prompt: "推奨 Instructions",
     promptText: "iXacs に関する質問では companyId が不明なら listCompanies を呼び出します。生産数、Cycle Time、状態には getProductionData、停止時間には getLostTime を使用し、統合分析では同じ companyId と日付条件で両方を呼び出します。分析前に period、warnings、dataQuality を確認し、実際の対象期間と単位を明記します。複数日の結果は期間全体の集計であり日別データではないため、集計値から日別傾向を推測しません。日別傾向が必要な場合は、比較する各日について mode=day を個別に呼び出します。API にない数値は推測せず、ユーザーと同じ言語で回答します。",
     openPolicy: "プライバシーポリシーを開く",
     noCompanies: "iXacs connection がありません。先に iXacs メニューで作成してください。",
     loadError: "設定を読み込めませんでした",
-    httpsUrl: "HTTPS URL",
   },
 } as const;
 
@@ -118,11 +91,10 @@ function normalizedOrigin(value: string) {
   return value.trim().replace(/\/+$/, "");
 }
 
-export function GptActionsPage() {
+export function GptActionsPage({ publicUrl }: { publicUrl: string }) {
   const { locale } = useLocale();
   const copy = COPY[locale];
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [origin, setOrigin] = useState("");
   const [revealedKey, setRevealedKey] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -131,10 +103,6 @@ export function GptActionsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void Promise.resolve().then(() => {
-      const stored = window.localStorage.getItem("ixacs-gpt-public-origin");
-      setOrigin(stored || window.location.origin);
-    });
     void fetch("/api/gpt-actions/settings", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error(copy.loadError);
@@ -147,16 +115,10 @@ export function GptActionsPage() {
       .catch((cause: Error) => setError(cause.message));
   }, [copy.loadError]);
 
-  const base = normalizedOrigin(origin);
+  const base = normalizedOrigin(publicUrl);
   const schemaUrl = base ? `${base}/api/gpt-actions/openapi.json` : "";
   const privacyUrl = base ? `${base}/gpt-actions/privacy` : "";
   const selectedLabel = selected.length === 0 ? copy.allCompanies : `${selected.length}/${settings?.connections.length ?? 0}`;
-  const setupSteps = useMemo(() => [copy.step1, copy.step2, copy.step3, copy.step4], [copy]);
-
-  function updateOrigin(value: string) {
-    setOrigin(value);
-    window.localStorage.setItem("ixacs-gpt-public-origin", normalizedOrigin(value));
-  }
 
   async function copyValue(id: string, value: string) {
     if (!value) return;
@@ -209,32 +171,15 @@ export function GptActionsPage() {
       {error ? <p className="inline-error" role="alert">{error}</p> : null}
 
       <section className="console-section">
-        <div className="console-section-head">
-          <div>
-            <h2 className="console-section-title">{copy.endpoint}</h2>
-            <p className="console-section-hint">{copy.endpointHint}</p>
-          </div>
-        </div>
-        <div className="gpt-copy-row">
-          <span className="console-label">{copy.httpsUrl}</span>
-          <div className="copy-field gpt-origin-field">
-            <input
-              className="gpt-origin-input"
-              value={origin}
-              onChange={(event) => updateOrigin(event.target.value)}
-              placeholder="https://your-domain.ngrok-free.app"
-            />
-            <button
-              type="button"
-              className="btn-icon"
-              disabled={!base}
-              aria-label={copied === "origin" ? copy.copied : copy.copy}
-              onClick={() => void copyValue("origin", base)}
-            >
-              {copied === "origin" ? <FiCheck size={16} /> : <FiCopy size={16} />}
-            </button>
-          </div>
-        </div>
+        <CopyRow
+          label={copy.endpoint}
+          value={base}
+          id="origin"
+          copied={copied}
+          copyLabel={copy.copy}
+          copiedText={copy.copied}
+          onCopy={copyValue}
+        />
         <CopyRow
           label={copy.schema}
           value={schemaUrl}
@@ -259,7 +204,6 @@ export function GptActionsPage() {
         <div className="console-section-head">
           <div>
             <h2 className="console-section-title">{copy.keyTitle}</h2>
-            <p className="console-section-hint">{copy.keyLead}</p>
           </div>
           <button
             className="btn btn-primary console-icon-btn"
@@ -305,7 +249,6 @@ export function GptActionsPage() {
               {copy.companies}
               <span className="gpt-badge">{selectedLabel}</span>
             </h2>
-            <p className="console-section-hint">{copy.companiesLead}</p>
           </div>
         </div>
         <div className="gpt-company-list">
@@ -347,19 +290,6 @@ export function GptActionsPage() {
       </section>
 
       <section className="console-section">
-        <div className="console-section-head">
-          <div>
-            <h2 className="console-section-title">{copy.setup}</h2>
-          </div>
-        </div>
-        <ol className="gpt-steps">
-          {setupSteps.map((step, index) => (
-            <li key={step}>
-              <span>{index + 1}</span>
-              <p>{step}</p>
-            </li>
-          ))}
-        </ol>
         <div className="gpt-prompt">
           <div className="gpt-prompt-head">
             <strong>{copy.prompt}</strong>
