@@ -1,53 +1,43 @@
-import { after } from "next/server";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
+import { expireLineSessionCookie, LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
 import { unlinkUserRichMenu } from "@/lib/line-messaging";
+import { markLineLoggedOut } from "@/lib/line-logins";
 
-function expiredSessionCookie() {
-  return {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-    expires: new Date(0),
-  };
-}
+async function logout(request: Request | null, kind: "redirect" | "json") {
+  const jar = await cookies();
+  const session = await readLineSessionToken(jar.get(LINE_AUTH_COOKIE)?.value);
 
-function scheduleUnlink(lineUserId: string | undefined) {
-  if (!lineUserId) return;
-  after(() => {
-    void unlinkUserRichMenu(lineUserId).catch((error) => {
+  if (session?.lineUserId) {
+    try {
+      await markLineLoggedOut(session.lineUserId);
+    } catch (error) {
+      console.warn("line login mapping logout failed:", error);
+    }
+    try {
+      await unlinkUserRichMenu(session.lineUserId);
+    } catch (error) {
       console.warn("rich menu unlink after logout failed:", error);
-    });
-  });
-}
+    }
+  }
 
-/** Clear session cookie and optionally unlink rich menu (non-blocking). */
-export async function POST() {
-  const jar = await cookies();
-  const session = await readLineSessionToken(jar.get(LINE_AUTH_COOKIE)?.value);
-
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(LINE_AUTH_COOKIE, "", expiredSessionCookie());
-  scheduleUnlink(session?.lineUserId);
-  return response;
-}
-
-/**
- * GET kept for compatibility, but LIFF should prefer POST + client redirect.
- * Uses 303 to /line/login so the browser applies Set-Cookie before the next page.
- */
-export async function GET(request: Request) {
-  const jar = await cookies();
-  const session = await readLineSessionToken(jar.get(LINE_AUTH_COOKIE)?.value);
+  if (kind === "json" || !request) {
+    const response = NextResponse.json({ ok: true });
+    expireLineSessionCookie(response);
+    return response;
+  }
 
   const redirectTo = new URL("/line/login", new URL(request.url).origin);
   redirectTo.searchParams.set("loggedOut", "1");
-
   const response = NextResponse.redirect(redirectTo, 303);
-  response.cookies.set(LINE_AUTH_COOKIE, "", expiredSessionCookie());
-  scheduleUnlink(session?.lineUserId);
+  expireLineSessionCookie(response);
   return response;
+}
+
+export async function POST() {
+  return logout(null, "json");
+}
+
+export async function GET(request: Request) {
+  return logout(request, "redirect");
 }

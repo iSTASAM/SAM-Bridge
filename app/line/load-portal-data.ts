@@ -13,6 +13,7 @@ import {
 import { getLineUserProfile, linkLoggedInRichMenu } from "@/lib/line-messaging";
 import { getControllableLineUuids } from "@/lib/push-api-keys";
 import { getLineBoard } from "@/lib/ixacs-store";
+import { lineLoginStatus, markLineLoggedIn } from "@/lib/line-logins";
 import type { LineStatusOption, LineStatusRow, LinePortalProps } from "./line-portal";
 
 function statusCatalog(statuses: IxacsStatus[], statusesByLine: Record<string, IxacsStatus[]>) {
@@ -145,6 +146,17 @@ export async function loadLinePortalData(): Promise<Omit<LinePortalProps, "page"
   const connection = await getConnection(session.connectionId);
   if (!connection || connection.loginId.trim().toLowerCase() !== session.loginId.trim().toLowerCase()) {
     redirect("/line/login");
+  }
+
+  const loginStatus = await lineLoginStatus(session.lineUserId);
+  if (loginStatus === "out") redirect("/line/login");
+  if (loginStatus === "unknown") {
+    await markLineLoggedIn({
+      lineUserId: session.lineUserId,
+      connectionId: connection.id,
+      customerId: session.customerId,
+      loginId: session.loginId,
+    }).catch((error) => console.warn("line login mapping backfill failed:", error));
   }
 
   // Ensure logged-in rich menu is linked (retry if login-time link failed / no token yet).

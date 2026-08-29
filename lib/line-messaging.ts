@@ -8,6 +8,7 @@ import { getLineChannelAccessToken as getStoredChannelAccessToken } from "@/lib/
 
 const LOGGED_IN_RICH_MENU_ID =
   process.env.LINE_RICHMENU_LOGGED_IN?.trim() || "richmenu-ab29249ac133a6fa9f2b9393f9a82d95";
+const LOGGED_OUT_RICH_MENU_ID = process.env.LINE_RICHMENU_LOGGED_OUT?.trim() || "";
 
 function strip(value?: string) {
   return value?.trim().replace(/^["']|["']$/g, "") || "";
@@ -74,9 +75,22 @@ export function lineLoggedInRichMenuId() {
   return LOGGED_IN_RICH_MENU_ID;
 }
 
+export function lineLoggedOutRichMenuId() {
+  return LOGGED_OUT_RICH_MENU_ID;
+}
+
 function isRealLineUserId(userId: string) {
   // Web preview uses synthetic ids like "web-preview:…".
   return Boolean(userId) && !userId.startsWith("web-preview:");
+}
+
+async function lineBotFetch(token: string, url: string, method: "POST" | "DELETE") {
+  return fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+  });
 }
 
 export async function linkLoggedInRichMenu(lineUserId: string) {
@@ -87,37 +101,10 @@ export async function linkLoggedInRichMenu(lineUserId: string) {
     return { ok: false as const, error: "NO_CHANNEL_ACCESS_TOKEN" as const };
   }
   const richMenuId = lineLoggedInRichMenuId();
-
-  // Warn when the rich menu exists but has no image — LINE will not show it.
-  try {
-    const content = await fetch(
-      `https://api-data.line.me/v2/bot/richmenu/${encodeURIComponent(richMenuId)}/content`,
-      {
-        method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-        signal: AbortSignal.timeout(8_000),
-      },
-    );
-    if (content.status === 404) {
-      console.warn(
-        "linkLoggedInRichMenu: rich menu has no image uploaded yet:",
-        richMenuId,
-        "— upload via POST /v2/bot/richmenu/{id}/content",
-      );
-    }
-  } catch (error) {
-    console.warn("linkLoggedInRichMenu: could not check rich menu image:", error);
-  }
-
-  const response = await fetch(
+  const response = await lineBotFetch(
+    token,
     `https://api.line.me/v2/bot/user/${encodeURIComponent(lineUserId)}/richmenu/${encodeURIComponent(richMenuId)}`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-      signal: AbortSignal.timeout(10_000),
-    },
+    "POST",
   );
   if (!response.ok) {
     const body = await response.text().catch(() => "");
@@ -150,6 +137,22 @@ export async function unlinkUserRichMenu(lineUserId: string) {
     console.warn("unlinkUserRichMenu failed:", response.status, body.slice(0, 500));
     return { ok: false as const, error: "UNLINK_FAILED" as const, status: response.status };
   }
+
+  // Restore the OA default (login) menu when configured — needed if Rich Menu 2
+  // was created with selected:true and became the channel default.
+  const loggedOutId = lineLoggedOutRichMenuId();
+  if (loggedOutId) {
+    const restore = await lineBotFetch(
+      token,
+      `https://api.line.me/v2/bot/user/${encodeURIComponent(lineUserId)}/richmenu/${encodeURIComponent(loggedOutId)}`,
+      "POST",
+    );
+    if (!restore.ok && restore.status !== 404) {
+      const body = await restore.text().catch(() => "");
+      console.warn("restore logged-out rich menu failed:", restore.status, body.slice(0, 500));
+    }
+  }
+
   return { ok: true as const };
 }
 

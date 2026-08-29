@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { after } from "next/server";
 import { createLineSessionToken, LINE_AUTH_COOKIE, lineSessionCookieOptions } from "@/lib/line-auth";
 import { authenticateSavedConnection } from "@/lib/ixacs-connections";
 import { linkLoggedInRichMenu } from "@/lib/line-messaging";
 import { getLineWebhookSettings } from "@/lib/line-webhook-settings";
+import { markLineLoggedIn } from "@/lib/line-logins";
 import { lineWebPreviewEnabled } from "@/lib/line-web-preview";
 
 export async function POST(request: Request) {
@@ -75,13 +75,28 @@ export async function POST(request: Request) {
     });
     if (!token) throw new Error("SESSION_NOT_CONFIGURED");
 
-    // Switch this LINE user to the logged-in rich menu after the response
-    // (do not block login on Messaging API latency).
-    after(() => {
-      void linkLoggedInRichMenu(lineUserId).catch((error) => {
-        console.warn("rich menu link after login failed:", error);
+    try {
+      await markLineLoggedIn({
+        lineUserId,
+        connectionId: connection.id,
+        customerId: requestedCustomer || connection.customerId,
+        loginId: connection.loginId,
       });
-    });
+    } catch (error) {
+      console.warn("line login mapping save failed:", error);
+    }
+
+    // Link Rich Menu 2 before returning so LINE shows it as soon as the user leaves LIFF.
+    try {
+      await linkLoggedInRichMenu(lineUserId);
+    } catch (error) {
+      console.warn("rich menu link after login failed:", error);
+    }
+    try {
+      await linkLoggedInRichMenu(lineUserId);
+    } catch (error) {
+      console.warn("rich menu link after login failed:", error);
+    }
 
     const response = NextResponse.json({ ok: true, destination: "/line/dashboard" });
     response.cookies.set(LINE_AUTH_COOKIE, token, lineSessionCookieOptions());

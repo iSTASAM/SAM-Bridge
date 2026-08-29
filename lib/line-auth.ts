@@ -49,13 +49,39 @@ export async function readLineSessionToken(token?: string): Promise<LineSession 
   }
 }
 
+function isProductionHttps() {
+  return process.env.NODE_ENV === "production";
+}
+
 export function lineSessionCookieOptions() {
+  const secure = isProductionHttps();
   return {
     httpOnly: true,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    // Must be "/" so /api/line/auth/logout can read the session (for rich-menu unlink).
+    // LINE's in-app browser drops SameSite=Lax on some navigations.
+    sameSite: (secure ? "none" : "lax") as "none" | "lax",
+    secure,
     path: "/",
     maxAge: LINE_AUTH_MAX_AGE,
   };
+}
+
+/** Expire every cookie variant that may still exist in LIFF (path / vs /line, Lax vs None). */
+export function expireLineSessionCookie(response: { cookies: { set: (name: string, value: string, options: object) => void } }) {
+  const secure = isProductionHttps();
+  const variants: Array<{ path: string; sameSite: "lax" | "none"; secure: boolean }> = [
+    { path: "/", sameSite: secure ? "none" : "lax", secure },
+    { path: "/", sameSite: "lax", secure },
+    { path: "/line", sameSite: secure ? "none" : "lax", secure },
+    { path: "/line", sameSite: "lax", secure },
+  ];
+  for (const variant of variants) {
+    response.cookies.set(LINE_AUTH_COOKIE, "", {
+      httpOnly: true,
+      sameSite: variant.sameSite,
+      secure: variant.sameSite === "none" ? true : variant.secure,
+      path: variant.path,
+      maxAge: 0,
+      expires: new Date(0),
+    });
+  }
 }

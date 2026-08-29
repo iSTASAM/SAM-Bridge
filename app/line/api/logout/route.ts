@@ -1,64 +1,46 @@
-import { after } from "next/server";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
+import { expireLineSessionCookie, LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
 import { unlinkUserRichMenu } from "@/lib/line-messaging";
+import { markLineLoggedOut } from "@/lib/line-logins";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Logout under /line/* so LIFF stays on the LINE portal origin/path tree.
- * GET navigates here from the portal; clears cookie then 303 → login.
- */
-export async function GET(request: Request) {
+async function logout(request: Request, kind: "redirect" | "json") {
   const jar = await cookies();
   const session = await readLineSessionToken(jar.get(LINE_AUTH_COOKIE)?.value);
+
+  if (session?.lineUserId) {
+    try {
+      await markLineLoggedOut(session.lineUserId);
+    } catch (error) {
+      console.warn("line login mapping logout failed:", error);
+    }
+    try {
+      await unlinkUserRichMenu(session.lineUserId);
+    } catch (error) {
+      console.warn("rich menu unlink after logout failed:", error);
+    }
+  }
+
+  if (kind === "json") {
+    const response = NextResponse.json({ ok: true });
+    expireLineSessionCookie(response);
+    return response;
+  }
 
   const redirectTo = new URL("/line/login", new URL(request.url).origin);
   redirectTo.searchParams.set("loggedOut", "1");
-
   const response = NextResponse.redirect(redirectTo, 303);
-  response.cookies.set(LINE_AUTH_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-    expires: new Date(0),
-  });
-
-  if (session?.lineUserId) {
-    after(() => {
-      void unlinkUserRichMenu(session.lineUserId).catch((error) => {
-        console.warn("rich menu unlink after logout failed:", error);
-      });
-    });
-  }
-
+  expireLineSessionCookie(response);
   return response;
 }
 
-export async function POST() {
-  const jar = await cookies();
-  const session = await readLineSessionToken(jar.get(LINE_AUTH_COOKIE)?.value);
+/** Full-page GET so LIFF applies Set-Cookie, then lands on login. */
+export async function GET(request: Request) {
+  return logout(request, "redirect");
+}
 
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(LINE_AUTH_COOKIE, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 0,
-    expires: new Date(0),
-  });
-
-  if (session?.lineUserId) {
-    after(() => {
-      void unlinkUserRichMenu(session.lineUserId).catch((error) => {
-        console.warn("rich menu unlink after logout failed:", error);
-      });
-    });
-  }
-
-  return response;
+export async function POST(request: Request) {
+  return logout(request, "json");
 }

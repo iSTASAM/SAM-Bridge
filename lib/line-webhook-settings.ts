@@ -169,7 +169,7 @@ export async function getLineChannelSecret(): Promise<string> {
     try {
       const stored = await Promise.race([
         readSupabaseSettings(),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 700)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
       ]);
       if (stored?.channelSecret) {
         rememberSecret(stored.channelSecret);
@@ -192,7 +192,7 @@ export async function getLineChannelAccessToken(): Promise<string> {
     try {
       const stored = await Promise.race([
         readSupabaseSettings(),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 700)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
       ]);
       if (stored?.channelAccessToken) {
         rememberAccessToken(stored.channelAccessToken);

@@ -506,18 +506,8 @@ export function LinePortal({
   async function logout() {
     if (loggingOut) return;
     setLoggingOut(true);
-    try {
-      // Prefer /line/api/logout (same tree as LIFF) — POST clears cookie reliably.
-      await fetch("/line/api/logout", {
-        method: "POST",
-        credentials: "same-origin",
-        cache: "no-store",
-      });
-    } catch {
-      // Still leave the portal even if the request fails.
-    } finally {
-      window.location.replace("/line/login?loggedOut=1");
-    }
+    // Navigate so LIFF applies Set-Cookie expire, unlinks Rich Menu 2, then shows login.
+    window.location.assign("/line/api/logout");
   }
 
   async function changeStatus(status: LineStatusOption) {
