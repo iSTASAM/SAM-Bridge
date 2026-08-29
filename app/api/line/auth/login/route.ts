@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createLineSessionToken, LINE_AUTH_COOKIE, lineSessionCookieOptions } from "@/lib/line-auth";
 import { authenticateSavedConnection } from "@/lib/ixacs-connections";
-import { linkLoggedInRichMenu } from "@/lib/line-messaging";
+import { isLineMessagingUserId, linkLoggedInRichMenu } from "@/lib/line-messaging";
 import { getLineWebhookSettings } from "@/lib/line-webhook-settings";
 import { markLineLoggedIn } from "@/lib/line-logins";
 import { lineWebPreviewEnabled } from "@/lib/line-web-preview";
@@ -9,6 +9,7 @@ import { lineWebPreviewEnabled } from "@/lib/line-web-preview";
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     idToken?: unknown;
+    lineUserId?: unknown;
     customerCompanyId?: unknown;
     loginId?: unknown;
     password?: unknown;
@@ -57,6 +58,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "INVALID_LINE_ID_TOKEN" }, { status: 401 });
     }
     lineUserId = identity.sub;
+    const fromLiff = typeof body.lineUserId === "string" ? body.lineUserId.trim() : "";
+    // LIFF profile userId is the Messaging API / OA id used for rich menus.
+    if (isLineMessagingUserId(fromLiff)) lineUserId = fromLiff;
   }
 
   try {
@@ -88,12 +92,10 @@ export async function POST(request: Request) {
 
     // Link Rich Menu 2 before returning so LINE shows it as soon as the user leaves LIFF.
     try {
-      await linkLoggedInRichMenu(lineUserId);
-    } catch (error) {
-      console.warn("rich menu link after login failed:", error);
-    }
-    try {
-      await linkLoggedInRichMenu(lineUserId);
+      const linked = await linkLoggedInRichMenu(lineUserId);
+      if (!linked.ok) {
+        console.warn("rich menu link after login did not succeed:", linked);
+      }
     } catch (error) {
       console.warn("rich menu link after login failed:", error);
     }

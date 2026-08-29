@@ -349,6 +349,11 @@ export function LinePortal({
     setLineProfile(initialLineProfile);
   }, [initialLineProfile]);
 
+  useEffect(() => {
+    if (page !== "home") return;
+    void fetch("/line/api/richmenu", { method: "POST", cache: "no-store" }).catch(() => undefined);
+  }, [page]);
+
   // Lightweight realtime poll — only while home is visible; skips when tab is hidden.
   useEffect(() => {
     if (page !== "home") return;

@@ -20,6 +20,7 @@ type Liff = {
   login(): void;
   isInClient(): boolean;
   getIDToken(): string | null;
+  getProfile(): Promise<{ userId: string; displayName: string; pictureUrl?: string }>;
   closeWindow(): void;
 };
 
@@ -171,6 +172,7 @@ export function LineLoginPage() {
                 loginId,
                 password,
                 idToken: liff?.getIDToken() ?? "",
+                lineUserId: (await liff?.getProfile().catch(() => null))?.userId ?? "",
                 inClient: liff?.isInClient() === true,
               },
         ),
