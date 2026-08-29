@@ -9,6 +9,7 @@ import {
 } from "@/lib/line-notification-rules";
 import { lineLoginStatus, markLineLoggedIn } from "@/lib/line-logins";
 import { dispatchLineStatusChange } from "@/lib/line-notification-runner";
+import { getLineChannelAccessToken, isLineMessagingUserId } from "@/lib/line-messaging";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,13 @@ export async function GET() {
   const context = await authenticatedContext();
   if (!context) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const rules = await listLineNotificationRules(context.session.lineUserId);
-  return NextResponse.json({ ok: true, rules });
+  const token = await getLineChannelAccessToken();
+  return NextResponse.json({
+    ok: true,
+    rules,
+    messagingReady: isLineMessagingUserId(context.session.lineUserId) && Boolean(token),
+    previewSession: !isLineMessagingUserId(context.session.lineUserId),
+  });
 }
 
 export async function POST(request: Request) {
@@ -47,6 +54,13 @@ export async function POST(request: Request) {
 
   const currentStatusUuid =
     typeof body.currentStatusUuid === "string" ? body.currentStatusUuid.trim() : "";
+
+  if (!isLineMessagingUserId(context.session.lineUserId)) {
+    return NextResponse.json({ ok: false, error: "LINE_CLIENT_REQUIRED" }, { status: 400 });
+  }
+  if (!(await getLineChannelAccessToken())) {
+    return NextResponse.json({ ok: false, error: "NO_CHANNEL_ACCESS_TOKEN" }, { status: 503 });
+  }
 
   try {
     await markLineLoggedIn({

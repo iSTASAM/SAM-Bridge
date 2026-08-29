@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
 import { getConnection } from "@/lib/ixacs-connections";
 import {
@@ -7,6 +7,7 @@ import {
   getCtMonitorData,
   summarizeMonitorJson,
 } from "@/lib/ixacs-client";
+import { dispatchLineStatusSnapshots } from "@/lib/line-notification-runner";
 
 export const dynamic = "force-dynamic";
 
@@ -38,14 +39,25 @@ export async function GET() {
     );
   }
 
+  const receivedAt = new Date().toISOString();
   const lines = summarizeMonitorJson(monitor.responseJson).map((row) => ({
     uuid: row.uuid,
     statusUuid: row.statusUuid,
   }));
 
+  after(() => {
+    void dispatchLineStatusSnapshots(
+      lines.map((line) => ({ lineUuid: line.uuid, statusUuid: line.statusUuid })),
+      receivedAt,
+      connection.id,
+    ).catch((error) => {
+      console.warn("LINE notification from portal monitor failed:", error);
+    });
+  });
+
   return NextResponse.json({
     ok: true,
     lines,
-    receivedAt: new Date().toISOString(),
+    receivedAt,
   });
 }

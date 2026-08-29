@@ -358,10 +358,8 @@ export function LinePortal({
     void fetch("/line/api/richmenu", { method: "POST", cache: "no-store" }).catch(() => undefined);
   }, [page]);
 
-  // Lightweight realtime poll — only while home is visible; skips when tab is hidden.
+  // Lightweight realtime poll — also drives LINE bot cards from the same iXacs snapshot.
   useEffect(() => {
-    if (page !== "home") return;
-
     const POLL_MS = 5_000;
     let timer: number | null = null;
     let inFlight: AbortController | null = null;
@@ -459,7 +457,7 @@ export function LinePortal({
       inFlight?.abort();
       if (timer != null) window.clearInterval(timer);
     };
-  }, [page]);
+  }, []);
 
   useEffect(() => {
     if (lineProfile?.displayName && lineProfile.pictureUrl) return;

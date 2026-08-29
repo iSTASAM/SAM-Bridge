@@ -472,6 +472,13 @@
   line-height: 1.5;
 }
 
+.notificationWarn {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .notificationForm {
   display: grid;
   gap: 14px;

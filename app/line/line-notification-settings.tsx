@@ -12,6 +12,10 @@ const COPY = {
     title: "ตั้งค่าการแจ้งเตือน",
     lead: "เลือกสถานะที่ต้องการ ระบบจะแจ้ง LINE ของคุณทันทีเมื่อเครื่องเข้าสู่สถานะนั้น ต้องแอดเพื่อน OA และทดสอบด้วยการเปลี่ยนสถานะ",
     hint: "ถ้าเครื่องอยู่ในสถานะนี้แล้ว ระบบจะส่งทันทีเมื่อกดเพิ่ม",
+    previewWarn: "ต้องเปิดจากแอป LINE และแอดเพื่อน OA จึงจะได้รับการ์ดแจ้งเตือน — โหมดเว็บบราวเซอร์ส่งข้อความไม่ได้",
+    tokenWarn: "ยังไม่ได้ตั้ง Channel Access Token ของ Messaging API จึงส่งการ์ดไม่ได้",
+    lineClientError: "กรุณาเปิดจากแอป LINE แล้วล็อกอินใหม่ เพื่อรับการ์ดแจ้งเตือน",
+    tokenError: "ยังไม่ได้ตั้ง Channel Access Token ของ Messaging API",
     line: "เครื่องจักร / ไลน์ผลิต",
     status: "สถานะที่ต้องการแจ้ง",
     add: "เพิ่มการแจ้งเตือน",
@@ -29,6 +33,10 @@ const COPY = {
     title: "Notification settings",
     lead: "Choose a status. Your LINE account is notified as soon as the machine enters it. Add the OA as a friend, then change the status to test.",
     hint: "If the machine is already in this status, a notification is sent when you add the rule.",
+    previewWarn: "Open this page in the LINE app and add the OA as a friend. Browser preview cannot receive bot cards.",
+    tokenWarn: "The Messaging API channel access token is not configured, so cards cannot be sent.",
+    lineClientError: "Open LINE, sign in again, then add the notification.",
+    tokenError: "Messaging API channel access token is not configured",
     line: "Machine / production line",
     status: "Status to notify",
     add: "Add notification",
@@ -46,6 +54,10 @@ const COPY = {
     title: "通知設定",
     lead: "通知するステータスを選択すると、設備がその状態になった時点ですぐに通知します。OA を友だち追加し、ステータス変更で確認してください。",
     hint: "すでにその状態の場合は、追加した時点で通知します。",
+    previewWarn: "LINEアプリから開き、OAを友だち追加してください。ブラウザプレビューではカードを送れません。",
+    tokenWarn: "Messaging API のチャネルアクセストークンが未設定のため、カードを送れません。",
+    lineClientError: "LINEアプリから再度ログインしてください。",
+    tokenError: "Messaging API のチャネルアクセストークンが未設定です",
     line: "設備・生産ライン",
     status: "通知するステータス",
     add: "通知を追加",
@@ -84,14 +96,23 @@ export function LineNotificationSettings({ lines }: { lines: LineStatusRow[] }) 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewSession, setPreviewSession] = useState(false);
+  const [messagingReady, setMessagingReady] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     void fetch("/line/api/notification-rules", { cache: "no-store" })
       .then(async (response) => {
-        const data = (await response.json()) as { rules?: LineNotificationRule[] };
+        const data = (await response.json()) as {
+          rules?: LineNotificationRule[];
+          messagingReady?: boolean;
+          previewSession?: boolean;
+        };
         if (!response.ok) throw new Error("LOAD_FAILED");
-        if (!cancelled) setRules(data.rules ?? []);
+        if (cancelled) return;
+        setRules(data.rules ?? []);
+        setPreviewSession(Boolean(data.previewSession));
+        setMessagingReady(data.messagingReady !== false);
       })
       .catch(() => {
         if (!cancelled) setError(copy.loadError);
@@ -125,10 +146,14 @@ export function LineNotificationSettings({ lines }: { lines: LineStatusRow[] }) 
         }),
       });
       const data = (await response.json()) as { rule?: LineNotificationRule; error?: string };
-      if (!response.ok || !data.rule) throw new Error(data.error || "SAVE_FAILED");
+      if (!response.ok || !data.rule) {
+        if (data.error === "LINE_CLIENT_REQUIRED") throw new Error(copy.lineClientError);
+        if (data.error === "NO_CHANNEL_ACCESS_TOKEN") throw new Error(copy.tokenError);
+        throw new Error(data.error || "SAVE_FAILED");
+      }
       setRules((current) => [data.rule!, ...current.filter((rule) => rule.id !== data.rule!.id)]);
-    } catch {
-      setError(copy.saveError);
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message !== "SAVE_FAILED" ? caught.message : copy.saveError);
     } finally {
       setBusy(false);
     }
@@ -167,6 +192,8 @@ export function LineNotificationSettings({ lines }: { lines: LineStatusRow[] }) 
             <h2 className={styles.notificationTitle}>{copy.title}</h2>
             <p className={styles.notificationLead}>{copy.lead}</p>
             <p className={styles.notificationLead}>{copy.hint}</p>
+            {previewSession ? <p className={styles.notificationWarn} role="status">{copy.previewWarn}</p> : null}
+            {!previewSession && !messagingReady ? <p className={styles.notificationWarn} role="status">{copy.tokenWarn}</p> : null}
           </div>
         </div>
 
@@ -186,7 +213,7 @@ export function LineNotificationSettings({ lines }: { lines: LineStatusRow[] }) 
             </select>
             {!selectedLine ? <small>{copy.noStatuses}</small> : null}
           </label>
-          <button type="button" className={styles.primaryAction} disabled={!selectedLine || !statusUuid || busy} onClick={() => void addRule()}>
+          <button type="button" className={styles.primaryAction} disabled={!selectedLine || !statusUuid || busy || previewSession || !messagingReady} onClick={() => void addRule()}>
             <FiPlus size={16} aria-hidden />
             {busy ? copy.adding : copy.add}
           </button>

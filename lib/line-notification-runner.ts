@@ -6,7 +6,7 @@ import {
   rememberLineNotificationObservation,
   type LineNotificationRule,
 } from "@/lib/line-notification-rules";
-import { pushLineMessages } from "@/lib/line-messaging";
+import { isLineMessagingUserId, pushLineMessages } from "@/lib/line-messaging";
 import type { PushEvent } from "@/lib/ixacs-store";
 
 function statusLabel(rule: LineNotificationRule) {
@@ -127,8 +127,21 @@ async function observe(
   observedAt: string,
 ) {
   let sent = 0;
-  const matching = rules.filter((rule) => rule.enabled && rule.lineUuid === lineUuid);
+  const matching = rules.filter(
+    (rule) =>
+      rule.enabled &&
+      rule.lineUuid === lineUuid &&
+      isLineMessagingUserId(rule.lineUserId) &&
+      (!connectionId || rule.connectionId === connectionId),
+  );
   for (const rule of matching) {
+    const alreadyObserved = rule.observedStatusUuid === statusUuid;
+    if (alreadyObserved && statusUuid !== rule.statusUuid) continue;
+    if (alreadyObserved && rule.lastNotifiedAt) continue;
+    if (alreadyObserved && !rule.lastNotifiedAt) {
+      const ageMs = Date.now() - Date.parse(rule.updatedAt);
+      if (Number.isFinite(ageMs) && ageMs < 60_000) continue;
+    }
     const state = await rememberLineNotificationObservation(rule, statusUuid, observedAt);
     rule.observedStatusUuid = statusUuid;
     rule.statusStartedAt = state.statusStartedAt;
@@ -140,6 +153,11 @@ async function observe(
       await notifyRule(rule, observedAt);
       rule.lastNotifiedAt = observedAt;
       sent += 1;
+      console.log("LINE notification card sent", {
+        ruleId: rule.id,
+        lineUuid: rule.lineUuid,
+        statusUuid,
+      });
     } catch (error) {
       console.warn("LINE notification send failed:", {
         ruleId: rule.id,
@@ -159,6 +177,22 @@ export async function dispatchLineStatusChange(
 ) {
   const rules = (await listLineNotificationRules()).filter((rule) => rule.enabled);
   return observe(rules, connectionId ?? "", lineUuid, statusUuid, observedAt);
+}
+
+export async function dispatchLineStatusSnapshots(
+  snapshots: Array<{ lineUuid: string; statusUuid: string | null }>,
+  observedAt = new Date().toISOString(),
+  connectionId?: string | null,
+) {
+  const rules = (await listLineNotificationRules()).filter((rule) => rule.enabled);
+  if (rules.length === 0) return 0;
+  const wanted = new Set(rules.map((rule) => rule.lineUuid));
+  let sent = 0;
+  for (const snapshot of snapshots) {
+    if (!snapshot.lineUuid || !wanted.has(snapshot.lineUuid)) continue;
+    sent += await observe(rules, connectionId ?? "", snapshot.lineUuid, snapshot.statusUuid, observedAt);
+  }
+  return sent;
 }
 
 export async function dispatchLineNotificationEvents(events: PushEvent[]) {
