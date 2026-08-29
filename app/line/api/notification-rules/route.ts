@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
-import { connectionAsTarget, discoverIxacsLines } from "@/lib/ixacs-client";
 import { getConnection } from "@/lib/ixacs-connections";
 import {
   createLineNotificationRule,
@@ -10,6 +9,7 @@ import {
 import { lineLoginStatus, markLineLoggedIn } from "@/lib/line-logins";
 import { dispatchLineStatusChange } from "@/lib/line-notification-runner";
 import { getLineChannelAccessToken, isLineMessagingUserId } from "@/lib/line-messaging";
+import { resolveLineNotificationTarget } from "@/lib/line-notification-target";
 
 export const dynamic = "force-dynamic";
 
@@ -44,16 +44,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "INVALID_RULE" }, { status: 400 });
   }
 
-  const discovery = await discoverIxacsLines(connectionAsTarget(context.connection));
-  const group = discovery.groups.find((item) => item.lines.some((line) => line.uuid === lineUuid));
-  const line = group?.lines.find((item) => item.uuid === lineUuid);
-  const status = (discovery.statusesByLine[lineUuid] ?? []).find((item) => item.uuid === statusUuid);
-  if (!line || !status) {
-    return NextResponse.json({ ok: false, error: "LINE_OR_STATUS_NOT_AVAILABLE" }, { status: 400 });
-  }
-
   const currentStatusUuid =
     typeof body.currentStatusUuid === "string" ? body.currentStatusUuid.trim() : "";
+  const target = await resolveLineNotificationTarget(context.connection, lineUuid, statusUuid);
+  if (!target) {
+    return NextResponse.json({ ok: false, error: "LINE_OR_STATUS_NOT_AVAILABLE" }, { status: 400 });
+  }
 
   if (!isLineMessagingUserId(context.session.lineUserId)) {
     return NextResponse.json({ ok: false, error: "LINE_CLIENT_REQUIRED" }, { status: 400 });
@@ -72,19 +68,20 @@ export async function POST(request: Request) {
     const rule = await createLineNotificationRule({
       lineUserId: context.session.lineUserId,
       connectionId: context.connection.id,
-      lineUuid,
-      lineName: line.name,
-      groupName: group?.name ?? "",
-      statusUuid,
-      statusNameTh: status.nameTh,
-      statusNameEn: status.nameEn,
-      statusNameJa: status.nameJa,
-      statusBackgroundColor: status.backgroundColor,
+      lineUuid: target.lineUuid,
+      lineName: target.lineName,
+      groupName: target.groupName,
+      statusUuid: target.statusUuid,
+      statusNameTh: target.statusNameTh,
+      statusNameEn: target.statusNameEn,
+      statusNameJa: target.statusNameJa,
+      statusBackgroundColor: target.statusBackgroundColor,
+      statusTextColor: target.statusTextColor,
       durationMinutes: 0,
     });
     if (currentStatusUuid) {
       try {
-        await dispatchLineStatusChange(lineUuid, currentStatusUuid, new Date().toISOString(), context.connection.id);
+        await dispatchLineStatusChange(target.lineUuid, currentStatusUuid, new Date().toISOString(), context.connection.id);
       } catch (error) {
         console.warn("LINE notification after saving rule failed:", error);
       }

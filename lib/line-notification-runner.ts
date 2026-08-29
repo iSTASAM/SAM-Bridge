@@ -13,16 +13,25 @@ function statusLabel(rule: LineNotificationRule) {
   return rule.statusNameTh || rule.statusNameEn || rule.statusNameJa || rule.statusUuid;
 }
 
-function flexColor(value: string | null) {
-  if (!value) return "#B42318";
+function flexColor(value: string | null, fallback: string) {
+  if (!value) return fallback;
   const hex = value.trim().match(/^#([0-9a-f]{6})(?:[0-9a-f]{2})?$/i);
   if (hex) return `#${hex[1]}`;
   const rgb = value.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-  if (!rgb) return "#B42318";
+  if (!rgb) return fallback;
   return `#${rgb
     .slice(1, 4)
     .map((part) => Math.min(255, Number(part)).toString(16).padStart(2, "0"))
     .join("")}`;
+}
+
+function contrastText(background: string) {
+  const hex = flexColor(background, "#B42318");
+  const r = Number.parseInt(hex.slice(1, 3), 16) / 255;
+  const g = Number.parseInt(hex.slice(3, 5), 16) / 255;
+  const b = Number.parseInt(hex.slice(5, 7), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.55 ? "#111111" : "#FFFFFF";
 }
 
 function displayTime(observedAt: string) {
@@ -35,81 +44,59 @@ function displayTime(observedAt: string) {
 
 async function notifyRule(rule: LineNotificationRule, observedAt: string) {
   const status = statusLabel(rule);
-  const statusColor = flexColor(rule.statusBackgroundColor);
+  const statusBg = flexColor(rule.statusBackgroundColor, "#1D4ED8");
+  const statusFg = flexColor(rule.statusTextColor ?? null, contrastText(statusBg));
   const result = await pushLineMessages(rule.lineUserId, [
     {
       type: "flex",
-      altText: `แจ้งเตือน ${rule.lineName}: ${status}`,
+      altText: `${rule.lineName}: ${status}`,
       contents: {
         type: "bubble",
-        size: "mega",
-        header: {
-          type: "box",
-          layout: "vertical",
-          backgroundColor: "#071B33",
-          paddingAll: "20px",
-          spacing: "sm",
-          contents: [
-            { type: "text", text: "SAM BRIDGE", color: "#67C8FF", weight: "bold", size: "xs" },
-            { type: "text", text: "Machine Alert", color: "#FFFFFF", weight: "bold", size: "xl" },
-            { type: "text", text: "ตรวจพบการเปลี่ยนสถานะเครื่องจักร", color: "#AFC4D9", size: "xs" },
-          ],
-        },
+        size: "kilo",
         body: {
           type: "box",
           layout: "vertical",
-          spacing: "lg",
-          paddingAll: "20px",
+          backgroundColor: "#071B33",
+          paddingAll: "16px",
+          spacing: "md",
           contents: [
             {
               type: "box",
               layout: "horizontal",
-              spacing: "md",
-              alignItems: "center",
               contents: [
-                {
-                  type: "box",
-                  layout: "vertical",
-                  width: "6px",
-                  height: "54px",
-                  cornerRadius: "3px",
-                  backgroundColor: statusColor,
-                  contents: [{ type: "text", text: " ", size: "xxs" }],
-                },
-                {
-                  type: "box",
-                  layout: "vertical",
-                  spacing: "xs",
-                  contents: [
-                    { type: "text", text: "สถานะปัจจุบัน", size: "xs", color: "#728399" },
-                    { type: "text", text: status, weight: "bold", size: "xl", color: "#071B33", wrap: true },
-                  ],
-                },
+                { type: "text", text: "SAM BRIDGE", color: "#67C8FF", weight: "bold", size: "xs", flex: 1 },
+                { type: "text", text: displayTime(observedAt), color: "#8A9BAD", size: "xxs", align: "end" },
               ],
             },
-            { type: "separator", color: "#E6ECF2" },
             {
               type: "box",
               layout: "vertical",
-              spacing: "sm",
+              backgroundColor: statusBg,
+              cornerRadius: "8px",
+              paddingAll: "14px",
               contents: [
-                { type: "text", text: "เครื่องจักร / ไลน์ผลิต", size: "xs", color: "#728399" },
-                { type: "text", text: rule.lineName, weight: "bold", size: "md", color: "#172B4D", wrap: true },
+                {
+                  type: "text",
+                  text: status,
+                  color: statusFg,
+                  weight: "bold",
+                  size: "lg",
+                  align: "center",
+                  wrap: true,
+                },
+              ],
+            },
+            {
+              type: "box",
+              layout: "vertical",
+              spacing: "xs",
+              contents: [
+                { type: "text", text: rule.lineName, color: "#FFFFFF", weight: "bold", size: "sm", wrap: true },
                 ...(rule.groupName
-                  ? [{ type: "text", text: rule.groupName, size: "sm", color: "#52667A", wrap: true }]
+                  ? [{ type: "text", text: rule.groupName, color: "#AFC4D9", size: "xs", wrap: true }]
                   : []),
               ],
             },
-            { type: "text", text: displayTime(observedAt), size: "xs", color: "#8A9BAD" },
-          ],
-        },
-        footer: {
-          type: "box",
-          layout: "horizontal",
-          paddingAll: "14px",
-          backgroundColor: "#F4F8FC",
-          contents: [
-            { type: "text", text: "iXacs  •  Real-time notification", size: "xs", color: "#52667A", align: "center" },
           ],
         },
       },

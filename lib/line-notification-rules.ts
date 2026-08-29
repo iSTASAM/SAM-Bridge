@@ -15,6 +15,7 @@ export type LineNotificationRule = {
   statusNameEn: string;
   statusNameJa: string;
   statusBackgroundColor: string | null;
+  statusTextColor: string | null;
   durationMinutes: number;
   enabled: boolean;
   observedStatusUuid: string | null;
@@ -36,6 +37,7 @@ type RuleRow = {
   status_name_en: string;
   status_name_ja: string;
   status_background_color: string | null;
+  status_text_color?: string | null;
   duration_minutes: number;
   enabled: boolean;
   observed_status_uuid: string | null;
@@ -57,6 +59,7 @@ export type NewLineNotificationRule = Pick<
   | "statusNameEn"
   | "statusNameJa"
   | "statusBackgroundColor"
+  | "statusTextColor"
   | "durationMinutes"
 >;
 
@@ -75,6 +78,7 @@ function rowToRule(row: RuleRow): LineNotificationRule {
     statusNameEn: row.status_name_en,
     statusNameJa: row.status_name_ja,
     statusBackgroundColor: row.status_background_color,
+    statusTextColor: row.status_text_color ?? null,
     durationMinutes: row.duration_minutes,
     enabled: row.enabled,
     observedStatusUuid: row.observed_status_uuid,
@@ -98,6 +102,7 @@ function ruleToRow(rule: LineNotificationRule): RuleRow {
     status_name_en: rule.statusNameEn,
     status_name_ja: rule.statusNameJa,
     status_background_color: rule.statusBackgroundColor,
+    status_text_color: rule.statusTextColor,
     duration_minutes: rule.durationMinutes,
     enabled: rule.enabled,
     observed_status_uuid: rule.observedStatusUuid,
@@ -147,6 +152,7 @@ export async function createLineNotificationRule(input: NewLineNotificationRule)
     ...input,
     id: randomUUID(),
     durationMinutes,
+    statusTextColor: input.statusTextColor ?? null,
     enabled: true,
     observedStatusUuid: null,
     statusStartedAt: null,
@@ -158,11 +164,20 @@ export async function createLineNotificationRule(input: NewLineNotificationRule)
   if (supabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      const { data, error } = await supabase
+      const row = ruleToRow(rule);
+      let { data, error } = await supabase
         .from("line_notification_rules")
-        .upsert(ruleToRow(rule), { onConflict: "line_user_id,line_uuid,status_uuid" })
+        .upsert(row, { onConflict: "line_user_id,line_uuid,status_uuid" })
         .select("*")
         .single();
+      if (error && /status_text_color/i.test(error.message)) {
+        const { status_text_color: _ignored, ...rest } = row;
+        ({ data, error } = await supabase
+          .from("line_notification_rules")
+          .upsert(rest, { onConflict: "line_user_id,line_uuid,status_uuid" })
+          .select("*")
+          .single());
+      }
       if (error) throw new Error(`LINE_NOTIFICATION_RULE_CREATE_FAILED: ${error.message}`);
       return rowToRule(data as RuleRow);
     }
@@ -178,38 +193,102 @@ export async function createLineNotificationRule(input: NewLineNotificationRule)
   return rule;
 }
 
+export type LineNotificationRulePatch = {
+  durationMinutes?: number;
+  enabled?: boolean;
+  lineUuid?: string;
+  lineName?: string;
+  groupName?: string;
+  statusUuid?: string;
+  statusNameTh?: string;
+  statusNameEn?: string;
+  statusNameJa?: string;
+  statusBackgroundColor?: string | null;
+  statusTextColor?: string | null;
+};
+
 export async function updateLineNotificationRule(
   id: string,
   lineUserId: string,
-  input: { durationMinutes?: number; enabled?: boolean },
+  input: LineNotificationRulePatch,
 ) {
   const current = (await listLineNotificationRules(lineUserId)).find((rule) => rule.id === id);
   if (!current) return null;
   const durationMinutes = input.durationMinutes === undefined ? current.durationMinutes : Math.round(input.durationMinutes);
   if (durationMinutes < 0 || durationMinutes > 1440) throw new Error("INVALID_DURATION");
-  const next = {
+  const targetChanged =
+    (input.lineUuid !== undefined && input.lineUuid !== current.lineUuid) ||
+    (input.statusUuid !== undefined && input.statusUuid !== current.statusUuid);
+  const next: LineNotificationRule = {
     ...current,
     durationMinutes,
     enabled: input.enabled ?? current.enabled,
+    lineUuid: input.lineUuid ?? current.lineUuid,
+    lineName: input.lineName ?? current.lineName,
+    groupName: input.groupName ?? current.groupName,
+    statusUuid: input.statusUuid ?? current.statusUuid,
+    statusNameTh: input.statusNameTh ?? current.statusNameTh,
+    statusNameEn: input.statusNameEn ?? current.statusNameEn,
+    statusNameJa: input.statusNameJa ?? current.statusNameJa,
+    statusBackgroundColor: input.statusBackgroundColor !== undefined ? input.statusBackgroundColor : current.statusBackgroundColor,
+    statusTextColor: input.statusTextColor !== undefined ? input.statusTextColor : current.statusTextColor ?? null,
+    observedStatusUuid: targetChanged ? null : current.observedStatusUuid,
+    statusStartedAt: targetChanged ? null : current.statusStartedAt,
+    lastNotifiedAt: targetChanged ? null : current.lastNotifiedAt,
     updatedAt: new Date().toISOString(),
   };
 
   if (supabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      const { data, error } = await supabase
+      const patch: Record<string, unknown> = {
+        duration_minutes: durationMinutes,
+        enabled: next.enabled,
+        line_uuid: next.lineUuid,
+        line_name: next.lineName,
+        group_name: next.groupName,
+        status_uuid: next.statusUuid,
+        status_name_th: next.statusNameTh,
+        status_name_en: next.statusNameEn,
+        status_name_ja: next.statusNameJa,
+        status_background_color: next.statusBackgroundColor,
+        status_text_color: next.statusTextColor,
+        observed_status_uuid: next.observedStatusUuid,
+        status_started_at: next.statusStartedAt,
+        last_notified_at: next.lastNotifiedAt,
+        updated_at: next.updatedAt,
+      };
+      let { data, error } = await supabase
         .from("line_notification_rules")
-        .update({ duration_minutes: durationMinutes, enabled: next.enabled, updated_at: next.updatedAt })
+        .update(patch)
         .eq("id", id)
         .eq("line_user_id", lineUserId)
         .select("*")
         .maybeSingle();
+      if (error && /status_text_color/i.test(error.message)) {
+        delete patch.status_text_color;
+        ({ data, error } = await supabase
+          .from("line_notification_rules")
+          .update(patch)
+          .eq("id", id)
+          .eq("line_user_id", lineUserId)
+          .select("*")
+          .maybeSingle());
+      }
       if (error) throw new Error(`LINE_NOTIFICATION_RULE_UPDATE_FAILED: ${error.message}`);
       return data ? rowToRule(data as RuleRow) : null;
     }
   }
 
   const rules = readFileRules();
+  const clash = Object.values(rules).find(
+    (item) =>
+      item.id !== id &&
+      item.lineUserId === lineUserId &&
+      item.lineUuid === next.lineUuid &&
+      item.statusUuid === next.statusUuid,
+  );
+  if (clash) throw new Error("RULE_EXISTS");
   rules[id] = next;
   writeFileRules(rules);
   return next;

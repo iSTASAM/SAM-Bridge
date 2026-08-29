@@ -485,6 +485,47 @@
   margin-top: 18px;
 }
 
+.statusGrid {
+  display: grid;
+  gap: 8px;
+}
+
+.statusChip {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.statusChipActive {
+  box-shadow: inset 0 0 0 2px var(--text-primary);
+}
+
+.notificationActions {
+  display: flex;
+  gap: 8px;
+}
+
+.secondaryAction {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -551,6 +592,45 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
+}
+
+.ruleEditing {
+  border-color: color-mix(in srgb, #67c8ff 45%, var(--border));
+}
+
+.ruleEdit {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ruleStatus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.ruleEdit strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ruleEdit small {
+  color: var(--text-tertiary);
+  font-size: 11px;
 }
 
 .ruleDisabled {
