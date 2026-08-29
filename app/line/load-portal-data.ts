@@ -52,9 +52,9 @@ function richerName(current: string, next: string, otherA: string, otherB: strin
 function toOption(status: IxacsStatus): LineStatusOption {
   return {
     uuid: status.uuid,
-    nameTh: status.nameTh || status.name,
-    nameEn: status.nameEn || status.name,
-    nameJa: status.nameJa || status.name,
+    nameTh: status.nameTh,
+    nameEn: status.nameEn,
+    nameJa: status.nameJa,
     backgroundColor: status.backgroundColor,
     textColor: status.textColor,
     blinking: status.blinking,
@@ -89,9 +89,9 @@ async function optionsForLine(lineUuid: string, selectable: IxacsStatus[], catal
       if (!existing) continue;
       options.set(status.uuid, {
         ...existing,
-        nameTh: status.nameTh || existing.nameTh,
-        nameEn: status.nameEn || existing.nameEn,
-        nameJa: status.nameJa || existing.nameJa,
+        nameTh: richerName(existing.nameTh, status.nameTh, existing.nameEn, existing.nameJa),
+        nameEn: richerName(existing.nameEn, status.nameEn, existing.nameTh, existing.nameJa),
+        nameJa: richerName(existing.nameJa, status.nameJa, existing.nameTh, existing.nameEn),
         backgroundColor: status.bgColor || existing.backgroundColor,
         textColor: status.fontColor || existing.textColor,
         blinking: status.blinking,
@@ -112,10 +112,28 @@ function resolveNames(
   options: LineStatusOption[],
 ) {
   const fromOption = statusUuid ? options.find((item) => item.uuid === statusUuid) : null;
+  const nameTh = richerName(
+    fromOption?.nameTh ?? "",
+    status?.nameTh ?? "",
+    fromOption?.nameEn ?? status?.nameEn ?? "",
+    fromOption?.nameJa ?? status?.nameJa ?? "",
+  );
+  const nameEn = richerName(
+    fromOption?.nameEn ?? "",
+    status?.nameEn ?? "",
+    fromOption?.nameTh ?? status?.nameTh ?? "",
+    fromOption?.nameJa ?? status?.nameJa ?? "",
+  );
+  const nameJa = richerName(
+    fromOption?.nameJa ?? "",
+    status?.nameJa ?? "",
+    fromOption?.nameTh ?? status?.nameTh ?? "",
+    fromOption?.nameEn ?? status?.nameEn ?? "",
+  );
   return {
-    nameTh: fromOption?.nameTh ?? status?.nameTh ?? status?.name ?? null,
-    nameEn: fromOption?.nameEn ?? status?.nameEn ?? status?.name ?? null,
-    nameJa: fromOption?.nameJa ?? status?.nameJa ?? status?.name ?? null,
+    nameTh: nameTh || fromOption?.nameTh || status?.nameTh || status?.name || null,
+    nameEn: nameEn || fromOption?.nameEn || status?.nameEn || status?.name || null,
+    nameJa: nameJa || fromOption?.nameJa || status?.nameJa || status?.name || null,
   };
 }
 
@@ -165,9 +183,24 @@ export async function loadLinePortalData(): Promise<Omit<LinePortalProps, "page"
             status = {
               uuid: statusUuid,
               name: known.nameTh || known.nameEn || known.nameJa,
-              nameTh: known.nameTh,
-              nameEn: known.nameEn,
-              nameJa: known.nameJa,
+              nameTh: richerName(
+                known.nameTh,
+                status?.nameTh ?? "",
+                known.nameEn,
+                known.nameJa,
+              ),
+              nameEn: richerName(
+                known.nameEn,
+                status?.nameEn ?? "",
+                known.nameTh,
+                known.nameJa,
+              ),
+              nameJa: richerName(
+                known.nameJa,
+                status?.nameJa ?? "",
+                known.nameTh,
+                known.nameEn,
+              ),
               backgroundColor: known.bgColor || status?.backgroundColor || null,
               textColor: known.fontColor || status?.textColor || null,
               blinking: known.blinking,

@@ -9,6 +9,8 @@ function isPushWebhook(request: NextRequest) {
   const method = request.method.toUpperCase();
   const { pathname } = request.nextUrl;
   if (pathname === "/api/push" || pathname.startsWith("/api/push/")) return true;
+  // LINE portal routes (/line/api/regist, /line/api/monitor, …) are not iXacs push webhooks.
+  if (pathname === "/line" || pathname.startsWith("/line/")) return false;
   return !pathname.startsWith("/api/") && !PASS_THROUGH.has(method);
 }
 

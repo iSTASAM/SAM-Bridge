@@ -59,7 +59,7 @@ const discoveryCache = new Map<
   string,
   { expiresAt: number; result: IxacsLineDiscoveryResult }
 >();
-const DISCOVERY_CACHE_VERSION = "statuses-by-line-v3-localized";
+const DISCOVERY_CACHE_VERSION = "statuses-by-line-v4-localized-no-crossfill";
 
 export function connectionAsTarget(connection: IxacsConnection): IxacsTarget {
   let refreshing: Promise<string> | null = null;
@@ -256,8 +256,20 @@ function unescapeJsonString(value: string) {
 }
 
 function readQuotedField(block: string, field: string) {
-  const match = block.match(new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, "i"));
-  return match ? unescapeJsonString(match[1]).trim() : "";
+  const patterns = [
+    new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, "i"),
+    new RegExp(`'${field}'\\s*:\\s*'((?:\\\\.|[^'\\\\])*)'`, "i"),
+    new RegExp(`\\b${field}\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, "i"),
+  ];
+  for (const pattern of patterns) {
+    const match = block.match(pattern);
+    if (match) return unescapeJsonString(match[1]).trim();
+  }
+  return "";
+}
+
+function readTagAttr(tag: string, name: string) {
+  return tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']*)["']`, "i"))?.[1] ?? "";
 }
 
 /** Slice the JSON-ish object that owns `"uuid":"<id>"` at uuidIndex. */
@@ -284,13 +296,14 @@ function sliceObjectAround(html: string, uuidIndex: number) {
 function parseLocalizedStatusNames(html: string) {
   const map = new Map<string, { nameTh: string; nameEn: string; nameJa: string }>();
 
+  // Keep languages separate — never copy En into Th/Ja (display layer falls back).
   const remember = (uuid: string, nameTh: string, nameEn: string, nameJa: string) => {
     if (!uuid || (!nameTh && !nameEn && !nameJa)) return;
     const previous = map.get(uuid);
     map.set(uuid, {
-      nameTh: nameTh || previous?.nameTh || nameEn || nameJa,
-      nameEn: nameEn || previous?.nameEn || nameTh || nameJa,
-      nameJa: nameJa || previous?.nameJa || nameEn || nameTh,
+      nameTh: nameTh || previous?.nameTh || "",
+      nameEn: nameEn || previous?.nameEn || "",
+      nameJa: nameJa || previous?.nameJa || "",
     });
   };
 
@@ -336,21 +349,20 @@ function parseLocalizedStatusNames(html: string) {
     if (nameJa || nameEn || nameTh) remember(uuid, nameTh, nameEn, nameJa);
   }
 
-  // Hidden inputs inside andon_reg modals: dispStringJa_row-col-idx
-  for (const match of html.matchAll(
-    /id=["']dispString(Ja|En|3rd)_(\d+-\d+-\d+)["'][^>]*\bvalue=["']([^"']*)["']/gi,
-  )) {
-    const kind = match[1].toLowerCase();
-    const suffix = match[2];
-    const value = decodeHtmlText(match[3]).trim();
-    if (!value) continue;
-    const uuid = html.match(
-      new RegExp(
-        `id=["']andonStatusStyleUuid_${suffix}["'][^>]*\\bvalue=["']([\\da-f-]{36})["']`,
-        "i",
-      ),
-    )?.[1];
-    if (!uuid) continue;
+  // Hidden inputs inside andon_reg modals (id/value order-independent).
+  const inputById = new Map<string, string>();
+  for (const match of html.matchAll(/<input\b[^>]*>/gi)) {
+    const tag = match[0];
+    const id = readTagAttr(tag, "id").trim();
+    if (!id) continue;
+    inputById.set(id, decodeHtmlText(readTagAttr(tag, "value")).trim());
+  }
+  for (const [id, value] of inputById) {
+    const dispMatch = id.match(/^dispString(Ja|En|3rd)_(\d+-\d+-\d+)$/i);
+    if (!dispMatch || !value) continue;
+    const kind = dispMatch[1].toLowerCase();
+    const uuid = inputById.get(`andonStatusStyleUuid_${dispMatch[2]}`)?.trim() ?? "";
+    if (!/^[0-9a-f-]{36}$/i.test(uuid)) continue;
     const previous = map.get(uuid) ?? { nameTh: "", nameEn: "", nameJa: "" };
     remember(
       uuid,
@@ -373,10 +385,16 @@ function statusFromParts(
   const fallback = normalizeStatusName(rawName, uuid);
   if (!fallback && !localizedNames) return null;
 
-  const nameTh = (localizedNames?.nameTh || fallback || "").trim();
-  const nameEn = (localizedNames?.nameEn || fallback || "").trim();
-  const nameJa = (localizedNames?.nameJa || fallback || "").trim();
-  const name = nameTh || nameEn || nameJa;
+  // Use per-language strings from iXacs only. Do not copy the visible
+  // (session-language) label into every locale slot.
+  let nameTh = (localizedNames?.nameTh || "").trim();
+  let nameEn = (localizedNames?.nameEn || "").trim();
+  let nameJa = (localizedNames?.nameJa || "").trim();
+  if (!nameTh && !nameEn && !nameJa) {
+    nameTh = nameEn = nameJa = fallback;
+  }
+
+  const name = nameTh || nameEn || nameJa || fallback;
   if (!name) return null;
 
   const statusColors = colors.get(uuid);
@@ -428,17 +446,29 @@ function parseStatusesByLine(html: string): Record<string, IxacsStatus[]> {
         ? (modalStarts[index + 1].index ?? html.length)
         : html.length;
     const block = html.slice(start, end);
-    const lineUuid = block.match(
-      /id=["']productionLineUuid_\d+-\d+["'][^>]*\bvalue=["']([^"']+)["']/i,
-    )?.[1];
+
+    const inputById = new Map<string, string>();
+    for (const match of block.matchAll(/<input\b[^>]*>/gi)) {
+      const tag = match[0];
+      const id = readTagAttr(tag, "id").trim();
+      if (!id) continue;
+      inputById.set(id, readTagAttr(tag, "value").trim());
+    }
+
+    let lineUuid = "";
+    for (const [id, value] of inputById) {
+      if (/^productionLineUuid_\d+-\d+$/i.test(id) && value) {
+        lineUuid = value;
+        break;
+      }
+    }
     if (!lineUuid) continue;
 
     const statuses = new Map<string, IxacsStatus>();
-    for (const match of block.matchAll(
-      /id=["']andonStatusStyleUuid_\d+-\d+-\d+["'][^>]*\bvalue=["']([^"']+)["']/gi,
-    )) {
-      const uuid = match[1];
-      if (statuses.has(uuid)) continue;
+    for (const [id, value] of inputById) {
+      if (!/^andonStatusStyleUuid_\d+-\d+-\d+$/i.test(id)) continue;
+      const uuid = value;
+      if (!/^[0-9a-f-]{36}$/i.test(uuid) || statuses.has(uuid)) continue;
       const named = block.match(
         new RegExp(
           `class=["'][^"']*\\bcls_${uuid}\\b[^"']*["'][^>]*>([\\s\\S]*?)</a>`,

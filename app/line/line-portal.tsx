@@ -80,6 +80,7 @@ const COPY = {
     noOptions: "ไลน์นี้ยังไม่มีสถานะที่ตั้งค่าไว้",
     current: "ปัจจุบัน",
     saving: "กำลังบันทึก...",
+    changed: "เปลี่ยนสถานะแล้ว",
     close: "ปิด",
   },
   en: {
@@ -107,6 +108,7 @@ const COPY = {
     noOptions: "No configured statuses for this line",
     current: "Current",
     saving: "Saving...",
+    changed: "Status updated",
     close: "Close",
   },
   ja: {
@@ -134,6 +136,7 @@ const COPY = {
     noOptions: "このラインに設定されたステータスがありません",
     current: "現在",
     saving: "保存中...",
+    changed: "ステータスを更新しました",
     close: "閉じる",
   },
 } as const;
@@ -336,6 +339,7 @@ export function LinePortal({
   const [selected, setSelected] = useState<LineStatusRow | null>(null);
   const [pendingUuid, setPendingUuid] = useState<string | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     setLines(initialLines);
@@ -493,6 +497,12 @@ export function LinePortal({
     };
   }, [lineProfile?.displayName, lineProfile?.pictureUrl]);
 
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
   async function logout() {
     if (loggingOut) return;
     setLoggingOut(true);
@@ -549,7 +559,10 @@ export function LinePortal({
             : line,
         ),
       );
+      const label = pickStatusName(locale, status.nameTh, status.nameEn, status.nameJa);
       setSelected(null);
+      setPickerError(null);
+      setToast(`${copy.changed} · ${label}`);
       router.refresh();
     } catch {
       setPickerError(copy.loadError);
@@ -689,6 +702,12 @@ export function LinePortal({
           }}
           onSelect={(status) => void changeStatus(status)}
         />
+      ) : null}
+
+      {toast ? (
+        <div className={styles.toast} role="status" aria-live="polite">
+          {toast}
+        </div>
       ) : null}
     </div>
   );

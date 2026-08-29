@@ -309,18 +309,23 @@ function rememberStatus(
   const nameTh = readString(style.dispString3rd);
   const nameEn = readString(style.dispStringEn);
   const nameJa = readString(style.dispStringJa);
+  const previous = statusMap(lineUuid).get(uuid);
+  const nextTh = nameTh ?? previous?.nameTh ?? "";
+  const nextEn = nameEn ?? previous?.nameEn ?? "";
+  const nextJa = nameJa ?? previous?.nameJa ?? "";
+  const fallback = nextTh || nextEn || nextJa || "Unknown";
   statusMap(lineUuid).set(uuid, {
     uuid,
-    nameTh: nameTh ?? nameEn ?? nameJa ?? "Unknown",
-    nameEn: nameEn ?? nameTh ?? nameJa ?? "Unknown",
-    nameJa: nameJa ?? nameEn ?? nameTh ?? "Unknown",
-    bgColor: readString(style.bgColor) ?? "#3a3f4a",
-    fontColor: readString(style.fontColor) ?? "#ffffff",
+    nameTh: nextTh || (nextEn || nextJa ? "" : fallback),
+    nameEn: nextEn || (nextTh || nextJa ? "" : fallback),
+    nameJa: nextJa || (nextTh || nextEn ? "" : fallback),
+    bgColor: readString(style.bgColor) ?? previous?.bgColor ?? "#3a3f4a",
+    fontColor: readString(style.fontColor) ?? previous?.fontColor ?? "#ffffff",
     blinking: readString(style.blinkingFlg) === "1",
-    blinkingBgColor: readString(style.blinkingBgColor),
-    blinkingFontColor: readString(style.blinkingFontColor),
-    dispOrd: readNumber(style.dispOrd, 99),
-    statusCode: readString(style.status),
+    blinkingBgColor: readString(style.blinkingBgColor) ?? previous?.blinkingBgColor ?? null,
+    blinkingFontColor: readString(style.blinkingFontColor) ?? previous?.blinkingFontColor ?? null,
+    dispOrd: readNumber(style.dispOrd, previous?.dispOrd ?? 99),
+    statusCode: readString(style.status) ?? previous?.statusCode ?? null,
     lastSeenAt: receivedAt,
   });
 }
@@ -341,9 +346,9 @@ function rememberHistory(
   history.push({
     id: `${receivedAt}-${statusUuid}`,
     statusUuid,
-    nameTh: readString(style?.dispString3rd) ?? known?.nameTh ?? "Unknown",
-    nameEn: readString(style?.dispStringEn) ?? known?.nameEn ?? "Unknown",
-    nameJa: readString(style?.dispStringJa) ?? known?.nameJa ?? "Unknown",
+    nameTh: readString(style?.dispString3rd) ?? known?.nameTh ?? "",
+    nameEn: readString(style?.dispStringEn) ?? known?.nameEn ?? "",
+    nameJa: readString(style?.dispStringJa) ?? known?.nameJa ?? "",
     bgColor: readString(style?.bgColor) ?? known?.bgColor ?? "#3a3f4a",
     fontColor: readString(style?.fontColor) ?? known?.fontColor ?? "#ffffff",
     startedAt: receivedAt,
