@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
 import { getConnection } from "@/lib/ixacs-connections";
@@ -9,7 +10,7 @@ import {
   summarizeMonitorJson,
   type IxacsStatus,
 } from "@/lib/ixacs-client";
-import { getLineUserProfile } from "@/lib/line-messaging";
+import { getLineUserProfile, linkLoggedInRichMenu } from "@/lib/line-messaging";
 import { getControllableLineUuids } from "@/lib/push-api-keys";
 import { getLineBoard } from "@/lib/ixacs-store";
 import type { LineStatusOption, LineStatusRow, LinePortalProps } from "./line-portal";
@@ -145,6 +146,13 @@ export async function loadLinePortalData(): Promise<Omit<LinePortalProps, "page"
   if (!connection || connection.loginId.trim().toLowerCase() !== session.loginId.trim().toLowerCase()) {
     redirect("/line/login");
   }
+
+  // Ensure logged-in rich menu is linked (retry if login-time link failed / no token yet).
+  after(() => {
+    void linkLoggedInRichMenu(session.lineUserId).catch((error) => {
+      console.warn("rich menu link on portal load failed:", error);
+    });
+  });
 
   const target = connectionAsTarget(connection);
   const discovery = await discoverIxacsLines(target);

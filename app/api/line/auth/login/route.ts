@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { createLineSessionToken, LINE_AUTH_COOKIE, lineSessionCookieOptions } from "@/lib/line-auth";
 import { authenticateSavedConnection } from "@/lib/ixacs-connections";
 import { linkLoggedInRichMenu } from "@/lib/line-messaging";
@@ -74,12 +75,13 @@ export async function POST(request: Request) {
     });
     if (!token) throw new Error("SESSION_NOT_CONFIGURED");
 
-    // Switch this LINE user to the logged-in rich menu (best-effort; login still succeeds).
-    try {
-      await linkLoggedInRichMenu(lineUserId);
-    } catch (error) {
-      console.warn("rich menu link after login failed:", error);
-    }
+    // Switch this LINE user to the logged-in rich menu after the response
+    // (do not block login on Messaging API latency).
+    after(() => {
+      void linkLoggedInRichMenu(lineUserId).catch((error) => {
+        console.warn("rich menu link after login failed:", error);
+      });
+    });
 
     const response = NextResponse.json({ ok: true, destination: "/line/dashboard" });
     response.cookies.set(LINE_AUTH_COOKIE, token, lineSessionCookieOptions());

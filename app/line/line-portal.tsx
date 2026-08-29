@@ -506,11 +506,9 @@ export function LinePortal({
   async function logout() {
     if (loggingOut) return;
     setLoggingOut(true);
-    try {
-      await fetch("/api/line/auth/logout", { method: "POST" });
-    } finally {
-      window.location.replace("/line/login");
-    }
+    // Full navigation so Set-Cookie is applied before /line/login renders
+    // (fetch + location.replace can bounce back if the cookie is still present).
+    window.location.assign("/api/line/auth/logout");
   }
 
   async function changeStatus(status: LineStatusOption) {

@@ -87,6 +87,29 @@ export async function linkLoggedInRichMenu(lineUserId: string) {
     return { ok: false as const, error: "NO_CHANNEL_ACCESS_TOKEN" as const };
   }
   const richMenuId = lineLoggedInRichMenuId();
+
+  // Warn when the rich menu exists but has no image — LINE will not show it.
+  try {
+    const content = await fetch(
+      `https://api-data.line.me/v2/bot/richmenu/${encodeURIComponent(richMenuId)}/content`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    if (content.status === 404) {
+      console.warn(
+        "linkLoggedInRichMenu: rich menu has no image uploaded yet:",
+        richMenuId,
+        "— upload via POST /v2/bot/richmenu/{id}/content",
+      );
+    }
+  } catch (error) {
+    console.warn("linkLoggedInRichMenu: could not check rich menu image:", error);
+  }
+
   const response = await fetch(
     `https://api.line.me/v2/bot/user/${encodeURIComponent(lineUserId)}/richmenu/${encodeURIComponent(richMenuId)}`,
     {
