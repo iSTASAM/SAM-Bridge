@@ -166,7 +166,7 @@ export async function dispatchLineNotificationEvents(events: PushEvent[]) {
   let sent = 0;
   for (const event of events) {
     if (!event.accepted || !event.lineUuid) continue;
-    sent += await observe(rules, event.connectionId, event.lineUuid, event.statusUuid, event.receivedAt);
+    sent += await observe(rules, event.connectionId ?? "", event.lineUuid, event.statusUuid, event.receivedAt);
   }
   return { checked: events.length, sent };
 }
