@@ -16,6 +16,7 @@ import {
   linkLoggedInRichMenu,
   pushLineMessages,
   replyLineMessages,
+  startLineLoadingAnimation,
   unlinkUserRichMenu,
 } from "@/lib/line-messaging";
 import { markLineFriendship } from "@/lib/line-users";
@@ -122,14 +123,19 @@ async function processAiMessage(input: {
   eventId: string;
   lineUserId: string;
   connectionId: string;
+  customerId?: string;
   question: string;
 }) {
+  const loadingRefresh = setInterval(() => {
+    void startLineLoadingAnimation(input.lineUserId, 60).catch(() => undefined);
+  }, 50_000);
   try {
     const history = await getLineAiHistory(input.lineUserId);
     await appendLineAiHistory(input.lineUserId, "user", input.question);
     const result = await runProductionAiChat({
       question: input.question,
       connectionIds: [input.connectionId],
+      customerIds: input.customerId ? [input.customerId] : undefined,
       history,
     });
     await appendLineAiHistory(input.lineUserId, "assistant", result.answer);
@@ -145,6 +151,7 @@ async function processAiMessage(input: {
     await pushLineMessages(input.lineUserId, [textMessage(message)]).catch(() => undefined);
     await finishLineAiEvent(input.eventId, "failed");
   } finally {
+    clearInterval(loadingRefresh);
     await pruneLineAiData().catch(() => undefined);
   }
 }
@@ -219,11 +226,20 @@ export async function POST(request: Request) {
 
     const login = await getLineLoginForAuthorization(userId);
     const connection = login?.loggedIn && login.connectionId ? await getConnection(login.connectionId) : null;
+    const customerAllowed = Boolean(
+      login &&
+      connection &&
+      (
+        !login.customerId ||
+        connection.customerId === login.customerId ||
+        connection.customers.some((customer) => customer.id === login.customerId)
+      ),
+    );
     const identityMatches = Boolean(
       login &&
       connection &&
       connection.loginId.trim().toLowerCase() === login.loginId.trim().toLowerCase() &&
-      (!login.customerId || connection.customerId === login.customerId),
+      customerAllowed,
     );
     if (!identityMatches) {
       if (event.replyToken && liffId) await replyLineMessages(event.replyToken, [loginMessage(liffId)]);
@@ -257,11 +273,12 @@ export async function POST(request: Request) {
       continue;
     }
 
-    await replyText(event.replyToken, "รับคำถามแล้ว กำลังวิเคราะห์ข้อมูลที่คุณมีสิทธิ์เข้าถึง…");
+    await startLineLoadingAnimation(userId, 60).catch(() => undefined);
     after(() => processAiMessage({
       eventId: requestId,
       lineUserId: userId,
       connectionId: connection!.id,
+      customerId: login?.customerId || connection!.customerId || undefined,
       question,
     }));
   }

@@ -162,6 +162,32 @@ export async function pushLineMessages(
   return { ok: true as const };
 }
 
+/** LINE-native typing/loading animation for one-on-one OA chats. */
+export async function startLineLoadingAnimation(lineUserId: string, loadingSeconds = 60) {
+  if (!isLineMessagingUserId(lineUserId)) {
+    return { ok: false as const, error: "INVALID_LINE_USER_ID" as const };
+  }
+  const allowed = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60];
+  const duration = allowed.includes(loadingSeconds) ? loadingSeconds : 60;
+  const token = await getLineChannelAccessToken();
+  if (!token) {
+    console.warn("startLineLoadingAnimation: no Messaging API channel access token");
+    return { ok: false as const, error: "NO_CHANNEL_ACCESS_TOKEN" as const };
+  }
+  const response = await lineBotFetch(
+    token,
+    "https://api.line.me/v2/bot/chat/loading/start",
+    "POST",
+    JSON.stringify({ chatId: lineUserId, loadingSeconds: duration }),
+  );
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    console.warn("startLineLoadingAnimation failed:", response.status, body.slice(0, 500));
+    return { ok: false as const, error: "LOADING_ANIMATION_FAILED" as const, status: response.status };
+  }
+  return { ok: true as const };
+}
+
 /** Remove per-user rich menu so the OA default (login) menu shows again. */
 export async function unlinkUserRichMenu(lineUserId: string) {
   if (!isRealLineUserId(lineUserId)) return { ok: false as const, skipped: true as const };
