@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
 import { getConnection, rememberConnectionLines } from "@/lib/ixacs-connections";
 import {
@@ -63,19 +63,26 @@ export async function GET() {
     statusUuid: row.statusUuid,
   }));
 
-  after(() => {
-    void dispatchLineStatusSnapshots(
+  let alertsSent = 0;
+  try {
+    // Process the exact snapshot returned to the dashboard before the request
+    // finishes. A deferred callback can be cut short when a serverless
+    // invocation is frozen, leaving the board fresh while the LINE alert waits
+    // for a later poll.
+    alertsSent = await dispatchLineStatusSnapshots(
       lines.map((line) => ({ lineUuid: line.uuid, statusUuid: line.statusUuid })),
       receivedAt,
       connection.id,
-    ).catch((error) => {
-      console.warn("LINE notification from portal monitor failed:", error);
-    });
-  });
+    );
+  } catch (error) {
+    // Status display must remain available even when LINE itself is unavailable.
+    console.warn("LINE notification from portal monitor failed:", error);
+  }
 
   return NextResponse.json({
     ok: true,
     lines,
     receivedAt,
+    alertsSent,
   });
 }

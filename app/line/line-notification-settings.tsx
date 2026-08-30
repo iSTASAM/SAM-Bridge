@@ -27,6 +27,8 @@ const COPY = {
     noStatuses: "ไลน์นี้ไม่มีสถานะให้เลือก",
     lineClientError: "กรุณาเปิดจากแอป LINE แล้วล็อกอินใหม่ เพื่อรับการ์ดแจ้งเตือน",
     tokenError: "ยังไม่ได้ตั้ง Channel Access Token ของ Messaging API",
+    pushMissing: "ไลน์นี้ยังไม่มี Push API ที่เปิดใช้งาน จึงตรวจแจ้งเตือนได้เฉพาะตอนเปิด SAM Bridge อยู่",
+    pushUnused: "iXacs ยังไม่เคยส่งข้อมูลเข้า Push API ของไลน์นี้ กรุณาตั้ง Push URL เป็น /api/push และใส่ x-api-key เพื่อให้แจ้งทันทีแม้ปิดหน้านี้",
   },
   en: {
     title: "Notification settings",
@@ -47,6 +49,8 @@ const COPY = {
     noStatuses: "This line has no selectable statuses",
     lineClientError: "Open LINE, sign in again, then add the notification.",
     tokenError: "Messaging API channel access token is not configured",
+    pushMissing: "This line has no active Push API key, so alerts can only be detected while SAM Bridge is open.",
+    pushUnused: "iXacs has never called this line's Push API. Set its Push URL to /api/push and add the x-api-key for immediate alerts while this page is closed.",
   },
   ja: {
     title: "通知設定",
@@ -67,6 +71,8 @@ const COPY = {
     noStatuses: "このラインには選択可能なステータスがありません",
     lineClientError: "LINEアプリから再度ログインしてください。",
     tokenError: "Messaging API のチャネルアクセストークンが未設定です",
+    pushMissing: "このラインには有効な Push API キーがないため、SAM Bridge を開いている間だけ通知を検知できます。",
+    pushUnused: "iXacs からこのラインの Push API への受信履歴がありません。Push URL を /api/push に設定し、x-api-key を登録してください。",
   },
 } as const;
 
@@ -126,16 +132,35 @@ export function LineNotificationSettings({ lines }: { lines: LineStatusRow[] }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pushLines, setPushLines] = useState<Array<{
+    lineUuid: string;
+    active: boolean;
+    lastReceivedAt: string | null;
+  }>>([]);
   const selectedLineUuid = selectedLine?.uuid ?? "";
   const selectedGroupUuid = selectedLine?.groupUuid ?? "";
+  const selectedPush = pushLines.find((item) => item.lineUuid === selectedLineUuid && item.active);
+  const pushWarning = selectedLineUuid
+    ? !selectedPush
+      ? copy.pushMissing
+      : !selectedPush.lastReceivedAt
+        ? copy.pushUnused
+        : null
+    : null;
 
   useEffect(() => {
     let cancelled = false;
     void fetch("/line/api/notification-rules", { cache: "no-store" })
       .then(async (response) => {
-        const data = (await response.json()) as { rules?: LineNotificationRule[] };
+        const data = (await response.json()) as {
+          rules?: LineNotificationRule[];
+          pushLines?: Array<{ lineUuid: string; active: boolean; lastReceivedAt: string | null }>;
+        };
         if (!response.ok) throw new Error("LOAD_FAILED");
-        if (!cancelled) setRules(data.rules ?? []);
+        if (!cancelled) {
+          setRules(data.rules ?? []);
+          setPushLines(data.pushLines ?? []);
+        }
       })
       .catch(() => {
         if (!cancelled) setError(copy.loadError);
@@ -303,6 +328,7 @@ export function LineNotificationSettings({ lines }: { lines: LineStatusRow[] }) 
               <small>{copy.noStatuses}</small>
             )}
           </div>
+          {pushWarning ? <p className={styles.notificationWarn}>{pushWarning}</p> : null}
           <div className={styles.notificationActions}>
             <button
               type="button"

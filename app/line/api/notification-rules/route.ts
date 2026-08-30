@@ -11,6 +11,7 @@ import { lineLoginStatus, markLineLoggedIn } from "@/lib/line-logins";
 import { dispatchLineStatusChange } from "@/lib/line-notification-runner";
 import { getLineChannelAccessToken, isLineMessagingUserId } from "@/lib/line-messaging";
 import { resolveLineNotificationTarget } from "@/lib/line-notification-target";
+import { getIssuedKeys } from "@/lib/push-api-keys";
 
 export const dynamic = "force-dynamic";
 
@@ -36,9 +37,17 @@ export async function GET() {
   if (!context) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const rules = await listLineNotificationRules(context.session.lineUserId);
   const token = await getLineChannelAccessToken();
+  const pushLines = (await getIssuedKeys(context.connection.id))
+    .filter((key) => key.line?.uuid)
+    .map((key) => ({
+      lineUuid: key.line!.uuid,
+      active: key.status === "active" && (!key.expiresAt || Date.parse(key.expiresAt) > Date.now()),
+      lastReceivedAt: key.lastUsedAt,
+    }));
   return NextResponse.json({
     ok: true,
     rules,
+    pushLines,
     messagingReady: isLineMessagingUserId(context.session.lineUserId) && Boolean(token),
     previewSession: !isLineMessagingUserId(context.session.lineUserId),
   });
