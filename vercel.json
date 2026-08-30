@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/notifications/monitor",
-      "schedule": "0 0 * * *"
+      "schedule": "* * * * *"
     }
   ]
 }

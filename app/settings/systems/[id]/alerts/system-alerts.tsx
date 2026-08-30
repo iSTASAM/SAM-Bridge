@@ -352,6 +352,7 @@ export function SystemAlerts({ machineId }: { machineId: string }) {
             <label className="as-field">
               <span>{copy.durationLabel}</span>
               <input type="number" min={0} max={1440} value={duration} onChange={(event) => setDuration(event.target.value)} />
+              <small className="as-field-hint">{copy.durationHint}</small>
             </label>
             <label className="as-check">
               <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />

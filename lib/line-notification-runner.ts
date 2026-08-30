@@ -136,6 +136,13 @@ async function observe(
     if (statusUuid !== rule.statusUuid || state.lastNotifiedAt) {
       continue;
     }
+    // durationMinutes <= 0 → fire as soon as the target status is observed.
+    // durationMinutes > 0 → require the status to persist that long (needs frequent monitor ticks).
+    const holdMs = Math.max(0, rule.durationMinutes) * 60_000;
+    if (holdMs > 0) {
+      const startedAt = Date.parse(state.statusStartedAt ?? observedAt);
+      if (!Number.isFinite(startedAt) || Date.now() - startedAt < holdMs) continue;
+    }
     try {
       await notifyRule(rule, observedAt);
       rule.lastNotifiedAt = observedAt;

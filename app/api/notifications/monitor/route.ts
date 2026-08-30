@@ -26,14 +26,22 @@ async function runMonitors() {
   });
 }
 
-export async function GET(request: NextRequest) {
+function cronAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!secret) return false;
+  const header = request.headers.get("authorization")?.trim() ?? "";
+  return header === `Bearer ${secret}`;
+}
+
+export async function GET(request: NextRequest) {
+  // Vercel Cron and Supabase pg_cron both call this with Bearer CRON_SECRET.
+  if (!cronAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   return runMonitors();
 }
 
+/** Browser/settings poll + cron POST. Detection itself is cheap; auth is enforced on GET for scheduled jobs. */
 export async function POST() {
   return runMonitors();
 }

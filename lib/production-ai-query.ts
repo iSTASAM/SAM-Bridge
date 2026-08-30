@@ -8,6 +8,9 @@ export type ProductionAiDateQuery = {
   year?: string;
 };
 
+const THAI_MONTH_PATTERN = "มกราคม|ม\\.?ค\\.?|กุมภาพันธ์|ก\\.?พ\\.?|มีนาคม|มี\\.?ค\\.?|เมษายน|เม\\.?ย\\.?|พฤษภาคม|พ\\.?ค\\.?|มิถุนายน|มิ\\.?ย\\.?|กรกฎาคม|ก\\.?ค\\.?|สิงหาคม|ส\\.?ค\\.?|กันยายน|ก\\.?ย\\.?|ตุลาคม|ต\\.?ค\\.?|พฤศจิกายน|พ\\.?ย\\.?|ธันวาคม|ธ\\.?ค\\.?";
+const ENGLISH_MONTH_PATTERN = "January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sept?|October|Oct|November|Nov|December|Dec";
+
 const THAI_MONTHS: Record<string, number> = {
   มกราคม: 1, มค: 1,
   กุมภาพันธ์: 2, กพ: 2,
@@ -89,10 +92,39 @@ export function shiftDate(date: string, days: number) {
   return new Date(value.valueOf() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+function shiftMonth(date: string, months: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  const cursor = new Date(Date.UTC(year, month - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 0)).getUTCDate();
+  return isoDate(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, Math.min(day, lastDay)) ?? date;
+}
+
 export function displayBizDate(date: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
   const [year, month, day] = date.split("-");
   return `${day}/${month}/${year}`;
+}
+
+function parseFlexibleDateToken(token: string, today: string): string | null {
+  const text = normalizeQuestion(token);
+  const thisYear = Number(today.slice(0, 4));
+  const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) return isoDate(normalizedYear(iso[1], thisYear), Number(iso[2]), Number(iso[3]));
+  const slash = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  if (slash) return isoDate(normalizedYear(slash[3], thisYear), Number(slash[2]), Number(slash[1]));
+  const thai = text.match(new RegExp(`^(\\d{1,2})\\s*(${THAI_MONTH_PATTERN})\\s*(?:พ\\.?ศ\\.?\\s*)?(\\d{2,4})?$`, "i"));
+  if (thai) {
+    return isoDate(normalizedYear(thai[3], thisYear), THAI_MONTHS[monthKey(thai[2])], Number(thai[1]));
+  }
+  const english = text.match(new RegExp(`^(\\d{1,2})\\s+(${ENGLISH_MONTH_PATTERN})[,\\s]+(\\d{2,4})$`, "i"))
+    ?? text.match(new RegExp(`^(${ENGLISH_MONTH_PATTERN})\\s+(\\d{1,2})[,\\s]+(\\d{2,4})$`, "i"));
+  if (english) {
+    const monthFirst = Number.isNaN(Number(english[1]));
+    const month = ENGLISH_MONTHS[monthKey(monthFirst ? english[1] : english[2])];
+    const day = Number(monthFirst ? english[2] : english[1]);
+    return isoDate(normalizedYear(english[3], thisYear), month, day);
+  }
+  return null;
 }
 
 export function dateQueryFromQuestion(question: string): ProductionAiDateQuery | null {
@@ -113,8 +145,36 @@ export function dateQueryFromQuestion(question: string): ProductionAiDateQuery |
     const previous = new Date(Date.UTC(thisYear, thisMonth - 2, 1));
     return { mode: "month", month: previous.toISOString().slice(0, 7) };
   }
+  if (/ปีที่แล้ว|last year|昨年|去年/i.test(text)) {
+    return { mode: "year", year: String(thisYear - 1) };
+  }
   if (/สัปดาห์ที่แล้ว|อาทิตย์ที่แล้ว|last week/i.test(text)) {
     return { mode: "range", from: shiftDate(today, -7), to: shiftDate(today, -1) };
+  }
+
+  const relative = text.match(/(?:ย้อนหลัง|ย้อนไป|ล่าสุด|past|last|previous)\s*(\d{1,3})\s*(วัน|weeks?|สัปดาห์|อาทิตย์|เดือน|months?|ปี|years?)/i);
+  if (relative) {
+    const amount = Math.max(1, Math.min(366, Number(relative[1])));
+    const unit = relative[2].toLocaleLowerCase("en-US");
+    if (/วัน|day/i.test(unit)) {
+      return { mode: "range", from: shiftDate(today, -amount), to: today };
+    }
+    if (/สัปดาห์|อาทิตย์|week/i.test(unit)) {
+      return { mode: "range", from: shiftDate(today, -(amount * 7)), to: today };
+    }
+    if (/เดือน|month/i.test(unit)) {
+      return { mode: "range", from: shiftMonth(today, -amount), to: today };
+    }
+    if (/ปี|year/i.test(unit)) {
+      return { mode: "range", from: shiftMonth(today, -(amount * 12)), to: today };
+    }
+  }
+
+  const rangeMatch = text.match(/(?:ตั้งแต่|จาก|from)\s*(.+?)\s*(?:ถึง|ถึงวันที่|to|-|–|—)\s*(.+)$/i);
+  if (rangeMatch) {
+    const from = parseFlexibleDateToken(rangeMatch[1], today);
+    const to = parseFlexibleDateToken(rangeMatch[2], today);
+    if (from && to && from <= to) return { mode: "range", from, to };
   }
 
   const isoFullDate = text.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
@@ -127,14 +187,14 @@ export function dateQueryFromQuestion(question: string): ProductionAiDateQuery |
     const date = isoDate(normalizedYear(fullDate[3], thisYear), Number(fullDate[2]), Number(fullDate[1]));
     if (date) return { mode: "day", date };
   }
-  const thaiDate = text.match(/(\d{1,2})\s*(มกราคม|ม\.?ค\.?|กุมภาพันธ์|ก\.?พ\.?|มีนาคม|มี\.?ค\.?|เมษายน|เม\.?ย\.?|พฤษภาคม|พ\.?ค\.?|มิถุนายน|มิ\.?ย\.?|กรกฎาคม|ก\.?ค\.?|สิงหาคม|ส\.?ค\.?|กันยายน|ก\.?ย\.?|ตุลาคม|ต\.?ค\.?|พฤศจิกายน|พ\.?ย\.?|ธันวาคม|ธ\.?ค\.?)\s*(?:พ\.?ศ\.?\s*)?(\d{2,4})?/i);
+  const thaiDate = text.match(new RegExp(`(\\d{1,2})\\s*(${THAI_MONTH_PATTERN})\\s*(?:พ\\.?ศ\\.?\\s*)?(\\d{2,4})?`, "i"));
   if (thaiDate) {
     const month = THAI_MONTHS[monthKey(thaiDate[2])];
     const date = isoDate(normalizedYear(thaiDate[3], thisYear), month, Number(thaiDate[1]));
     if (date) return { mode: "day", date };
   }
-  const englishDate = text.match(/\b(\d{1,2})\s+(January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sept?|October|Oct|November|Nov|December|Dec)[,\s]+(\d{2,4})\b/i)
-    ?? text.match(/\b(January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sept?|October|Oct|November|Nov|December|Dec)\s+(\d{1,2})[,\s]+(\d{2,4})\b/i);
+  const englishDate = text.match(new RegExp(`\\b(\\d{1,2})\\s+(${ENGLISH_MONTH_PATTERN})[,\\s]+(\\d{2,4})\\b`, "i"))
+    ?? text.match(new RegExp(`\\b(${ENGLISH_MONTH_PATTERN})\\s+(\\d{1,2})[,\\s]+(\\d{2,4})\\b`, "i"));
   if (englishDate) {
     const monthFirst = Number.isNaN(Number(englishDate[1]));
     const month = ENGLISH_MONTHS[monthKey(monthFirst ? englishDate[1] : englishDate[2])];
@@ -142,6 +202,21 @@ export function dateQueryFromQuestion(question: string): ProductionAiDateQuery |
     const date = isoDate(normalizedYear(englishDate[3], thisYear), month, day);
     if (date) return { mode: "day", date };
   }
+
+  // Month name without day, e.g. "เดือนกรกฎาคม 2026", "สิงหาคม 2569", "July 2026"
+  const thaiMonthOnly = text.match(new RegExp(`(?:เดือน\\s*)?(${THAI_MONTH_PATTERN})\\s*(?:พ\\.?ศ\\.?\\s*)?(\\d{2,4})`, "i"));
+  if (thaiMonthOnly) {
+    const month = THAI_MONTHS[monthKey(thaiMonthOnly[1])];
+    const year = normalizedYear(thaiMonthOnly[2], thisYear);
+    if (month) return { mode: "month", month: `${year}-${String(month).padStart(2, "0")}` };
+  }
+  const englishMonthOnly = text.match(new RegExp(`\\b(${ENGLISH_MONTH_PATTERN})\\s+(\\d{2,4})\\b`, "i"));
+  if (englishMonthOnly) {
+    const month = ENGLISH_MONTHS[monthKey(englishMonthOnly[1])];
+    const year = normalizedYear(englishMonthOnly[2], thisYear);
+    if (month) return { mode: "month", month: `${year}-${String(month).padStart(2, "0")}` };
+  }
+
   const dayMonth = text.match(/\b(\d{1,2})[\/-](\d{1,2})\b/);
   if (dayMonth) {
     const date = isoDate(thisYear, Number(dayMonth[2]), Number(dayMonth[1]));
@@ -154,8 +229,10 @@ export function dateQueryFromQuestion(question: string): ProductionAiDateQuery |
   }
   const isoMonth = text.match(/\b(\d{4})-(0[1-9]|1[0-2])\b/);
   if (isoMonth) return { mode: "month", month: `${isoMonth[1]}-${isoMonth[2]}` };
-  const year = text.match(/(?:ปี|year)\s*(\d{4})\b/i);
-  if (year) return { mode: "year", year: String(normalizedYear(year[1], thisYear)) };
+  const year = text.match(/(?:ปี|year)\s*(\d{4})\b/i) ?? text.match(/\b(20\d{2}|25\d{2})\b/);
+  if (year && /ปี|year|ทั้งปี|ทั้งปีนี้/i.test(text)) {
+    return { mode: "year", year: String(normalizedYear(year[1], thisYear)) };
+  }
 
   const dayOnly = text.match(/วันที่\s*(\d{1,2})\b/) ?? text.match(/\b(?:on\s+)?the\s+(\d{1,2})(?:st|nd|rd|th)?\b/i);
   if (dayOnly) {
@@ -226,5 +303,9 @@ export function needsLostTime(question: string, hasLineFilter: boolean) {
 }
 
 export function needsTrend(question: string) {
-  return /trend|แนวโน้ม|ย้อนหลัง|เทียบ.*(?:ก่อน|เดือน|วัน|สัปดาห์|ปี)|เปรียบเทียบ|previous|last (?:day|week|month|year)/i.test(question);
+  // "ย้อนหลัง N เดือน" is a date-period request, not a trend chart request.
+  if (/(?:ย้อนหลัง|ย้อนไป|ล่าสุด|past|last|previous)\s*\d{1,3}\s*(วัน|weeks?|สัปดาห์|อาทิตย์|เดือน|months?|ปี|years?)/i.test(question)) {
+    return false;
+  }
+  return /trend|แนวโน้ม|เทียบ.*(?:ก่อน|เดือน|วัน|สัปดาห์|ปี)|เปรียบเทียบ|previous|last (?:day|week|month|year)/i.test(question);
 }
