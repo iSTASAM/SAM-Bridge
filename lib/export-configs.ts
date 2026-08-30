@@ -5,11 +5,17 @@ import { isSlackWebhookUrl } from "@/lib/slack-webhook";
 import { deleteExportRunState } from "@/lib/export-run-state";
 import { deleteExportAlertState } from "@/lib/export-alert-state";
 import {
+  connectionSecretsConfigured,
+  decryptSecret,
+  encryptSecret,
+} from "@/lib/connection-secrets";
+import {
   deleteSapConnection,
   getSapConnection,
   publicSapConnection,
   type PublicSapConnection,
 } from "@/lib/sap-connections";
+import { getSupabaseAdmin, supabaseConfigured } from "@/lib/supabase-admin";
 
 export const DESTINATION_TYPES = [
   "rest",
@@ -123,9 +129,59 @@ export type PublicExportConfig = Omit<ExportConfig, "endpoint"> & {
   sapConnection: PublicSapConnection | null;
 };
 
+type DbRow = {
+  id: string;
+  name: string;
+  description: string;
+  source_connection_id: string | null;
+  group_uuids: string[] | null;
+  line_uuids: string[] | null;
+  all_groups: boolean;
+  all_lines: boolean;
+  fields: string[] | null;
+  destination_type: string;
+  destination_name: string;
+  endpoint: string;
+  sap_connection_id: string;
+  sap_action: string;
+  sap_order: unknown;
+  sap_mapping_validated: boolean;
+  sap_confirmation_unit: string;
+  format: string;
+  trigger_mode: string;
+  interval_minutes: number;
+  changes_only: boolean;
+  include_nulls: boolean;
+  alert_rules: unknown;
+  power_bi_settings: unknown;
+  power_bi_api_key: string;
+  excel_settings: unknown;
+  excel_api_key: string;
+  status: string;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  last_run_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const STATE_FILE = path.join(process.cwd(), "data", "export-configs.json");
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 let drafts = new Map<string, ExportConfig>();
 let hydrated = false;
+let hydratePromise: Promise<void> | null = null;
+
+function maybeEncrypt(value: string) {
+  return connectionSecretsConfigured() ? encryptSecret(value) : value;
+}
+
+function maybeDecrypt(value: string) {
+  return value.startsWith("enc:v1:") ? decryptSecret(value) : value;
+}
+
+function uuidOrNull(value: string) {
+  return UUID_RE.test(value) ? value : null;
+}
 
 function sapReady(sapConnectionId: string) {
   if (!sapConnectionId) return false;
@@ -145,12 +201,136 @@ function exportStatus(config: Pick<ExportConfig, "destinationType" | "endpoint" 
   return "draft";
 }
 
-function hydrate(force = false) {
-  if (hydrated && !force) return;
-  hydrated = true;
+function normalizeStored(config: Partial<ExportConfig> & { id: string }): { config: ExportConfig; generatedApiKey: boolean } {
+  const generatedApiKey = !config.powerBiApiKey || !config.excelApiKey;
+  const next = {
+    id: config.id,
+    name: config.name || "Untitled export",
+    description: config.description ?? "",
+    sourceConnectionId: config.sourceConnectionId ?? "",
+    groupUuids: config.groupUuids ?? [],
+    lineUuids: config.lineUuids ?? [],
+    allGroups: config.allGroups !== false,
+    allLines: config.allLines !== false,
+    fields: config.fields ?? [],
+    destinationType: DESTINATION_TYPES.includes(config.destinationType as DestinationType)
+      ? (config.destinationType as DestinationType)
+      : "rest",
+    destinationName: config.destinationName ?? "",
+    endpoint: maybeDecrypt(config.endpoint ?? ""),
+    sapConnectionId: config.sapConnectionId ?? "",
+    sapAction: (config.sapAction === "custom-mapping" ? "custom-mapping" : "production-result") as SapAction,
+    sapOrder: sapOrder(config.sapOrder, null),
+    sapMappingValidated: config.sapMappingValidated === true,
+    sapConfirmationUnit: config.sapConfirmationUnit?.trim() || "PC",
+    format:
+      config.format === "flat-json" || config.format === "csv" || config.format === "canonical-json"
+        ? config.format
+        : "canonical-json",
+    triggerMode:
+      config.triggerMode === "schedule" || config.triggerMode === "data-change" || config.triggerMode === "manual"
+        ? config.triggerMode
+        : "manual",
+    intervalMinutes: typeof config.intervalMinutes === "number" ? config.intervalMinutes : 15,
+    changesOnly: config.changesOnly !== false,
+    includeNulls: config.includeNulls === true,
+    alertRules: config.alertRules ?? [],
+    powerBiSettings: powerBiSettings(config.powerBiSettings, DEFAULT_POWER_BI_SETTINGS),
+    powerBiApiKey: config.powerBiApiKey || randomUUID().replaceAll("-", ""),
+    excelSettings: excelSettings(config.excelSettings, DEFAULT_EXCEL_SETTINGS),
+    excelApiKey: config.excelApiKey || randomUUID().replaceAll("-", ""),
+    lastRunAt: config.lastRunAt ?? null,
+    lastRunStatus: config.lastRunStatus === "success" || config.lastRunStatus === "error" ? config.lastRunStatus : null,
+    lastRunError: config.lastRunError ?? null,
+    createdAt: config.createdAt || new Date().toISOString(),
+    updatedAt: config.updatedAt || config.createdAt || new Date().toISOString(),
+    status: "draft" as const,
+  };
+  return { config: { ...next, status: exportStatus(next) }, generatedApiKey };
+}
+
+function rowToConfig(row: DbRow): ExportConfig {
+  return normalizeStored({
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    sourceConnectionId: row.source_connection_id ?? "",
+    groupUuids: row.group_uuids ?? [],
+    lineUuids: row.line_uuids ?? [],
+    allGroups: row.all_groups,
+    allLines: row.all_lines,
+    fields: row.fields ?? [],
+    destinationType: row.destination_type as DestinationType,
+    destinationName: row.destination_name,
+    endpoint: row.endpoint,
+    sapConnectionId: row.sap_connection_id,
+    sapAction: row.sap_action as SapAction,
+    sapOrder: sapOrder(row.sap_order, null),
+    sapMappingValidated: row.sap_mapping_validated,
+    sapConfirmationUnit: row.sap_confirmation_unit,
+    format: row.format as ExportFormat,
+    triggerMode: row.trigger_mode as TriggerMode,
+    intervalMinutes: row.interval_minutes,
+    changesOnly: row.changes_only,
+    includeNulls: row.include_nulls,
+    alertRules: row.alert_rules as AlertRule[],
+    powerBiSettings: row.power_bi_settings as PowerBiSettings,
+    powerBiApiKey: maybeDecrypt(row.power_bi_api_key ?? ""),
+    excelSettings: row.excel_settings as ExcelSettings,
+    excelApiKey: maybeDecrypt(row.excel_api_key ?? ""),
+    lastRunAt: row.last_run_at,
+    lastRunStatus: row.last_run_status as ExportConfig["lastRunStatus"],
+    lastRunError: row.last_run_error,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }).config;
+}
+
+function configToRow(config: ExportConfig): Omit<DbRow, "created_at" | "updated_at"> & {
+  created_at: string;
+  updated_at: string;
+} {
+  return {
+    id: config.id,
+    name: config.name,
+    description: config.description,
+    source_connection_id: uuidOrNull(config.sourceConnectionId),
+    group_uuids: config.groupUuids,
+    line_uuids: config.lineUuids,
+    all_groups: config.allGroups,
+    all_lines: config.allLines,
+    fields: config.fields,
+    destination_type: config.destinationType,
+    destination_name: config.destinationName,
+    endpoint: maybeEncrypt(config.endpoint),
+    sap_connection_id: config.sapConnectionId,
+    sap_action: config.sapAction,
+    sap_order: config.sapOrder,
+    sap_mapping_validated: config.sapMappingValidated,
+    sap_confirmation_unit: config.sapConfirmationUnit,
+    format: config.format,
+    trigger_mode: config.triggerMode,
+    interval_minutes: config.intervalMinutes,
+    changes_only: config.changesOnly,
+    include_nulls: config.includeNulls,
+    alert_rules: config.alertRules,
+    power_bi_settings: config.powerBiSettings,
+    power_bi_api_key: maybeEncrypt(config.powerBiApiKey),
+    excel_settings: config.excelSettings,
+    excel_api_key: maybeEncrypt(config.excelApiKey),
+    status: config.status,
+    last_run_at: config.lastRunAt,
+    last_run_status: config.lastRunStatus,
+    last_run_error: config.lastRunError,
+    created_at: config.createdAt,
+    updated_at: config.updatedAt,
+  };
+}
+
+function hydrateFromFile() {
   if (!existsSync(STATE_FILE)) {
     drafts = new Map();
-    return;
+    return false;
   }
   try {
     const parsed = JSON.parse(readFileSync(STATE_FILE, "utf8")) as {
@@ -158,41 +338,98 @@ function hydrate(force = false) {
     };
     let generatedApiKey = false;
     drafts = new Map(
-      Object.entries(parsed.configs ?? {}).map(([id, config]) => {
-        if (!config.powerBiApiKey || !config.excelApiKey) generatedApiKey = true;
-        const next = {
-          ...config,
-          sapConnectionId: config.sapConnectionId ?? "",
-          sapAction: (config.sapAction === "custom-mapping" ? "custom-mapping" : "production-result") as SapAction,
-          sapOrder: sapOrder(config.sapOrder, null),
-          sapMappingValidated: config.sapMappingValidated === true,
-          sapConfirmationUnit: config.sapConfirmationUnit?.trim() || "PC",
-          alertRules: config.alertRules ?? [],
-          powerBiSettings: powerBiSettings(config.powerBiSettings, DEFAULT_POWER_BI_SETTINGS),
-          powerBiApiKey: config.powerBiApiKey || randomUUID().replaceAll("-", ""),
-          excelSettings: excelSettings(config.excelSettings, DEFAULT_EXCEL_SETTINGS),
-          excelApiKey: config.excelApiKey || randomUUID().replaceAll("-", ""),
-          lastRunAt: config.lastRunAt ?? null,
-          lastRunStatus: config.lastRunStatus ?? null,
-          lastRunError: config.lastRunError ?? null,
-        };
-        return [id, { ...next, status: exportStatus(next) }];
+      Object.entries(parsed.configs ?? {}).map(([id, raw]) => {
+        const { config, generatedApiKey: generated } = normalizeStored({ ...raw, id });
+        if (generated) generatedApiKey = true;
+        return [id, config];
       }),
     );
-    // Persist generated keys for legacy Power BI exports so they remain stable.
-    if (generatedApiKey) persist();
+    return generatedApiKey;
   } catch {
     drafts = new Map();
+    return false;
   }
 }
 
-function persist() {
+function persistFile() {
   mkdirSync(path.dirname(STATE_FILE), { recursive: true });
   writeFileSync(
     STATE_FILE,
     JSON.stringify({ configs: Object.fromEntries(drafts) }, null, 2),
     "utf8",
   );
+}
+
+async function hydrateFromSupabase() {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+  const { data, error } = await supabase.from("export_configs").select("*").order("updated_at", { ascending: false });
+  if (error) throw new Error(`EXPORTS_LOAD_FAILED: ${error.message}`);
+  const rows = (data as DbRow[] | null) ?? [];
+  drafts = new Map(rows.map((row) => [row.id, rowToConfig(row)]));
+
+  if (drafts.size > 0) return;
+
+  const generatedApiKey = hydrateFromFile();
+  if (drafts.size === 0) return;
+  const { error: upsertError } = await supabase.from("export_configs").upsert([...drafts.values()].map(configToRow));
+  if (upsertError) throw new Error(`EXPORTS_MIGRATE_FAILED: ${upsertError.message}`);
+  if (generatedApiKey) persistFile();
+}
+
+async function fetchOneFromSupabase(id: string) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+  const { data, error } = await supabase.from("export_configs").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`EXPORTS_LOAD_FAILED: ${error.message}`);
+  return data ? rowToConfig(data as DbRow) : null;
+}
+
+async function ensureHydrated() {
+  if (hydrated) return;
+  if (!hydratePromise) {
+    hydratePromise = (async () => {
+      if (supabaseConfigured()) {
+        await hydrateFromSupabase();
+      } else if (hydrateFromFile()) {
+        persistFile();
+      }
+      hydrated = true;
+    })().finally(() => {
+      hydratePromise = null;
+    });
+  }
+  await hydratePromise;
+}
+
+async function persistConfig(config: ExportConfig) {
+  drafts.set(config.id, config);
+  if (supabaseConfigured()) {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+    const { error } = await supabase.from("export_configs").upsert(configToRow(config));
+    if (error) throw new Error(`EXPORTS_SAVE_FAILED: ${error.message}`);
+    return;
+  }
+  persistFile();
+}
+
+async function removeConfig(id: string) {
+  const current = drafts.get(id);
+  const removed = drafts.delete(id);
+  if (!removed) return false;
+  if (supabaseConfigured()) {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+    const { error } = await supabase.from("export_configs").delete().eq("id", id);
+    if (error) throw new Error(`EXPORTS_DELETE_FAILED: ${error.message}`);
+  } else {
+    persistFile();
+  }
+  deleteExportRunState(id);
+  deleteExportAlertState(id);
+  if (current?.sapConnectionId) deleteSapConnection(current.sapConnectionId);
+  return true;
 }
 
 function strings(value: unknown, fallback: string[] = []) {
@@ -354,18 +591,29 @@ function applyInput(current: ExportConfig, input: ExportConfigInput): ExportConf
   };
 }
 
-export function listExportConfigs() {
-  hydrate(true);
+export async function listExportConfigs() {
+  if (supabaseConfigured()) {
+    await hydrateFromSupabase();
+    hydrated = true;
+  } else {
+    await ensureHydrated();
+  }
   return [...drafts.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export function getExportConfig(id: string) {
-  hydrate(true);
+export async function getExportConfig(id: string) {
+  if (supabaseConfigured()) {
+    const config = await fetchOneFromSupabase(id);
+    if (config) drafts.set(id, config);
+    else drafts.delete(id);
+    return config;
+  }
+  await ensureHydrated();
   return drafts.get(id) ?? null;
 }
 
-export function createExportConfig(input: ExportConfigInput) {
-  hydrate(true);
+export async function createExportConfig(input: ExportConfigInput) {
+  await ensureHydrated();
   const now = new Date().toISOString();
   const id = randomUUID();
   const draft = applyInput(
@@ -406,32 +654,25 @@ export function createExportConfig(input: ExportConfigInput) {
     },
     input,
   );
-  drafts.set(id, draft);
-  persist();
+  await persistConfig(draft);
   return draft;
 }
 
-export function updateExportConfig(id: string, input: ExportConfigInput) {
-  hydrate(true);
-  const current = drafts.get(id);
+export async function updateExportConfig(id: string, input: ExportConfigInput) {
+  const current = (await getExportConfig(id)) ?? drafts.get(id) ?? null;
   if (!current) return null;
   const draft = applyInput(current, input);
-  drafts.set(id, draft);
-  persist();
+  await persistConfig(draft);
   return draft;
 }
 
-export function deleteExportConfig(id: string) {
-  hydrate(true);
-  const current = drafts.get(id);
-  const removed = drafts.delete(id);
-  if (removed) {
-    persist();
-    deleteExportRunState(id);
-    deleteExportAlertState(id);
-    if (current?.sapConnectionId) deleteSapConnection(current.sapConnectionId);
+export async function deleteExportConfig(id: string) {
+  await ensureHydrated();
+  if (supabaseConfigured() && !drafts.has(id)) {
+    const existing = await fetchOneFromSupabase(id);
+    if (existing) drafts.set(id, existing);
   }
-  return removed;
+  return removeConfig(id);
 }
 
 export function publicExportConfig(config: ExportConfig): PublicExportConfig {
@@ -448,9 +689,8 @@ export function publicExportConfig(config: ExportConfig): PublicExportConfig {
   };
 }
 
-export function recordExportRun(id: string, ok: boolean, error?: string | null) {
-  hydrate(true);
-  const current = drafts.get(id);
+export async function recordExportRun(id: string, ok: boolean, error?: string | null) {
+  const current = (await getExportConfig(id)) ?? drafts.get(id) ?? null;
   if (!current) return null;
   const next: ExportConfig = {
     ...current,
@@ -458,7 +698,10 @@ export function recordExportRun(id: string, ok: boolean, error?: string | null) 
     lastRunStatus: ok ? "success" : "error",
     lastRunError: ok ? null : error ?? "Export failed",
   };
-  drafts.set(id, next);
-  persist();
+  await persistConfig(next);
   return next;
+}
+
+export function exportConfigsStorage() {
+  return supabaseConfigured() ? ("supabase" as const) : ("file" as const);
 }

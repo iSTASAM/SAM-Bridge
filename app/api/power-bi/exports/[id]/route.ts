@@ -121,7 +121,7 @@ function numeric(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function inScope(config: ReturnType<typeof getExportConfig>, row: Row) {
+function inScope(config: Awaited<ReturnType<typeof getExportConfig>>, row: Row) {
   if (!config) return false;
   const lineId = String(row.productionLineUuid ?? row.uuid ?? "");
   const groupId = String(row.productionGroupUuid ?? "");
@@ -413,7 +413,7 @@ function enqueueLostTimeWarm(requestUrl: string, connectionId: string, dates: st
 }
 
 export async function serveTabularExport(request: Request, id: string, destination: "power-bi" | "excel") {
-  const config = getExportConfig(id);
+  const config = await getExportConfig(id);
   const label = destination === "excel" ? "EXCEL" : "POWER_BI";
   if (!config) return NextResponse.json({ error: `${label}_EXPORT_NOT_FOUND`, exportId: id }, { status: 404 });
   if (config.destinationType !== destination) return NextResponse.json({ error: `NOT_A_${label}_EXPORT` }, { status: 400 });

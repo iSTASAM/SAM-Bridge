@@ -5,6 +5,8 @@ import { FiPlus, FiX } from "react-icons/fi";
 import { OverlayFrame } from "../connections/overlay-frame";
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenRouterIcon } from "../../flow/ai-icons";
 import { useLocale, type Locale } from "../../locale-context";
+import { SYSTEMS_COPY } from "../systems/copy";
+import { SystemsStage } from "../systems/systems-channel-nav";
 
 type ProviderKind = "openai" | "anthropic" | "gemini" | "openrouter" | "custom";
 type UsageId = "maintenance" | "production" | "events" | "enrichment";
@@ -92,6 +94,8 @@ function copy(locale: Locale) {
       status: "Connection status",
       cancel: "Cancel",
       save: "Save",
+      saved: "บันทึกแล้ว",
+      none: "ยังไม่ได้เลือก",
       available: "Available Models",
       defaultModel: "Default model",
       lastTest: "Last connection test",
@@ -153,6 +157,8 @@ function copy(locale: Locale) {
       status: "Connection status",
       cancel: "Cancel",
       save: "Save",
+      saved: "保存しました",
+      none: "未選択",
       available: "Available Models",
       defaultModel: "Default model",
       lastTest: "Last connection test",
@@ -213,6 +219,8 @@ function copy(locale: Locale) {
     status: "Connection status",
     cancel: "Cancel",
     save: "Save",
+    saved: "Saved",
+    none: "Not set",
     available: "Available Models",
     defaultModel: "Default model",
     lastTest: "Last connection test",
@@ -273,10 +281,9 @@ function parseOption(value: string): ModelRef | null {
   return { providerId: value.slice(0, index), model: value.slice(index + 2) };
 }
 
-function livePath(kind: ProviderKind) {
-  if (kind === "gemini") return "/api/ai/gemini";
-  if (kind === "openrouter") return "/api/ai/openrouter";
-  return null;
+function livePath(kind: ProviderKind, id?: string) {
+  if (kind === "custom") return id ? `/api/ai/providers/${id}` : null;
+  return `/api/ai/providers/${kind}`;
 }
 
 function ProviderMark({ kind, size = 22 }: { kind: ProviderKind; size?: number }) {
@@ -290,6 +297,7 @@ function ProviderMark({ kind, size = 22 }: { kind: ProviderKind; size?: number }
 export function AiModelsPage() {
   const { locale } = useLocale();
   const label = copy(locale);
+  const systems = SYSTEMS_COPY[locale];
   const [providers, setProviders] = useState<Provider[]>(() => BUILTINS.map(emptyProvider));
   const [usages, setUsages] = useState<Record<UsageId, ModelRef | null>>({
     maintenance: null,
@@ -298,36 +306,61 @@ export function AiModelsPage() {
     enrichment: null,
   });
   const [defaultModel, setDefaultModel] = useState<ModelRef | null>(null);
+  const [defaultStatus, setDefaultStatus] = useState("");
+  const [tab, setTab] = useState<"providers" | "default">("providers");
   const [drawer, setDrawer] = useState<Drawer>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([
-      fetch("/api/ai/gemini", { cache: "no-store" }),
-      fetch("/api/ai/openrouter", { cache: "no-store" }),
-    ]).then(async ([geminiResponse, openrouterResponse]) => {
-      const payloads = await Promise.all([geminiResponse.json(), openrouterResponse.json()]) as Array<{
-        connected?: boolean;
-        keyLast4?: string;
-        model?: string;
-        lastTestedAt?: string;
-        models?: Array<{ id: string }>;
-      }>;
+    void fetch("/api/ai/default", { cache: "no-store" }).then(async (response) => {
+      const data = (await response.json()) as { default?: ModelRef | null };
+      if (!cancelled && data.default?.providerId && data.default.model) setDefaultModel(data.default);
+    });
+    void fetch("/api/ai/providers", { cache: "no-store" }).then(async (response) => {
+      const data = (await response.json()) as {
+        providers?: Array<{
+          id: string;
+          kind?: ProviderKind;
+          name?: string;
+          connected?: boolean;
+          keyLast4?: string;
+          model?: string;
+          lastTestedAt?: string;
+          baseUrl?: string;
+        }>;
+      };
       if (cancelled) return;
-      setProviders((current) =>
-        current.map((provider) => {
-          const data = provider.id === "gemini" ? payloads[0] : provider.id === "openrouter" ? payloads[1] : null;
-          if (!data?.connected) return provider;
+      const saved = new Map((data.providers ?? []).map((item) => [item.id, item]));
+      setProviders((current) => {
+        const builtins = current.map((provider) => {
+          const row = saved.get(provider.id);
+          if (!row?.connected) return provider;
           return {
             ...provider,
             connected: true,
-            keyLast4: data.keyLast4 ?? "",
-            model: data.model ?? "",
-            lastTestedAt: data.lastTestedAt ?? null,
-            models: (data.models ?? []).map((item) => item.id),
+            keyLast4: row.keyLast4 ?? "",
+            model: row.model ?? "",
+            lastTestedAt: row.lastTestedAt ?? null,
+            baseUrl: row.baseUrl ?? "",
+            models: row.model ? [row.model] : [],
           };
-        }),
-      );
+        });
+        const extras = [...saved.values()]
+          .filter((row) => row.connected && !current.some((item) => item.id === row.id))
+          .map((row) => ({
+            id: row.id,
+            kind: (row.kind ?? "custom") as ProviderKind,
+            name: row.name || row.id,
+            hint: "OpenAI-compatible API",
+            connected: true,
+            keyLast4: row.keyLast4 ?? "",
+            baseUrl: row.baseUrl ?? "",
+            model: row.model ?? "",
+            lastTestedAt: row.lastTestedAt ?? null,
+            models: row.model ? [row.model] : [],
+          }));
+        return [...builtins, ...extras];
+      });
     });
     return () => {
       cancelled = true;
@@ -357,6 +390,22 @@ export function AiModelsPage() {
     setUsages((current) => ({ ...current, [id]: parseOption(value) }));
   }
 
+  async function persistDefault(next: ModelRef | null) {
+    setDefaultModel(next);
+    setDefaultStatus("");
+    const response = await fetch("/api/ai/default", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(next ?? {}),
+    });
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      setDefaultStatus(data.error || label.testFail);
+      return;
+    }
+    setDefaultStatus(label.saved);
+  }
+
   function saveProvider(next: Provider) {
     setProviders((current) => {
       const exists = current.some((item) => item.id === next.id);
@@ -367,7 +416,8 @@ export function AiModelsPage() {
 
   async function disconnect(providerId: string) {
     if (usagesFor(providerId).length) return;
-    const endpoint = livePath(providers.find((item) => item.id === providerId)?.kind ?? "custom");
+    const target = providers.find((item) => item.id === providerId);
+    const endpoint = livePath(target?.kind ?? "custom", target?.id);
     if (endpoint) await fetch(endpoint, { method: "DELETE" });
     setProviders((current) =>
       current.map((item) =>
@@ -376,62 +426,127 @@ export function AiModelsPage() {
           : item,
       ),
     );
-    setDefaultModel((current) => (current?.providerId === providerId ? null : current));
+    if (defaultModel?.providerId === providerId) void persistDefault(null);
     setDrawer(null);
   }
 
   return (
-    <div className="ai-page">
-      <header className="ai-head">
-        <h1 className="ai-title">{label.title}</h1>
-      </header>
-
-      <section className="ai-section">
-        <div className="ai-list">
-          {providers.map((provider) => (
-            <article key={provider.id} className="ai-row">
-              <span className="ai-row-icon">
-                <ProviderMark kind={provider.kind} />
-              </span>
-              <div className="ai-row-main">
-                <strong>{provider.name}</strong>
-                {provider.connected ? (
-                  <>
-                    <p className="ai-status is-connected">
-                      <i className="is-on" />
-                      {label.connected}
-                    </p>
-                    <p className="ai-meta">
-                      {label.model}: {provider.model || "—"}
-                    </p>
-                  </>
-                ) : (
-                  <p className="ai-status is-off">
-                    <i />
-                    {label.notConnected}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                className="ai-row-action"
-                onClick={() =>
-                  setDrawer({
-                    mode: provider.connected ? "manage" : "configure",
-                    providerId: provider.id,
-                  })
-                }
-              >
-                {provider.connected ? label.manage : label.configure}
-              </button>
-            </article>
-          ))}
-        </div>
-        <button type="button" className="ai-add" onClick={() => setDrawer({ mode: "add" })}>
-          <FiPlus size={15} />
-          {label.add}
+    <SystemsStage
+      title={label.title}
+      backHref="/settings/systems"
+      backLabel={systems.back}
+      actions={
+        <button
+          type="button"
+          className="btn btn-primary console-icon-btn"
+          aria-label={label.add}
+          onClick={() => {
+            setTab("providers");
+            setDrawer({ mode: "add" });
+          }}
+        >
+          <FiPlus size={16} />
         </button>
+      }
+    >
+      <div className="ai-page">
+      <div className="as-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          className={`as-tab${tab === "providers" ? " is-active" : ""}`}
+          aria-selected={tab === "providers"}
+          onClick={() => setTab("providers")}
+        >
+          {label.providers}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`as-tab${tab === "default" ? " is-active" : ""}`}
+          aria-selected={tab === "default"}
+          onClick={() => setTab("default")}
+        >
+          {label.default}
+        </button>
+      </div>
+
+      {tab === "providers" ? (
+      <section className="ai-section">
+        <div className="as-console-table-wrap">
+          <table className="as-console-table">
+            <thead>
+              <tr>
+                <th>{label.name}</th>
+                <th>{label.status}</th>
+                <th>{label.model}</th>
+                <th className="as-console-actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {providers.map((provider) => (
+                <tr key={provider.id}>
+                  <td>
+                    <span className="as-console-item">
+                      <span className="as-menu-icon" aria-hidden>
+                        <ProviderMark kind={provider.kind} size={16} />
+                      </span>
+                      <strong>{provider.name}</strong>
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`as-badge${provider.connected ? " is-on" : ""}`}>
+                      {provider.connected ? label.connected : label.notConnected}
+                    </span>
+                  </td>
+                  <td>{provider.model || "—"}</td>
+                  <td className="as-console-actions">
+                    <button
+                      type="button"
+                      className="ai-row-action"
+                      onClick={() =>
+                        setDrawer({
+                          mode: provider.connected ? "manage" : "configure",
+                          providerId: provider.id,
+                        })
+                      }
+                    >
+                      {provider.connected ? label.manage : label.configure}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
+      ) : (
+      <section className="ai-section as-default-panel">
+        <div className="ai-setting">
+          <div>
+            <strong>{label.defaultTitle}</strong>
+            <p>{label.defaultLead}</p>
+          </div>
+          {options.length ? (
+            <select
+              className="ai-select"
+              value={defaultModel ? optionValue(defaultModel) : ""}
+              onChange={(event) => void persistDefault(parseOption(event.target.value))}
+            >
+              <option value="">{label.none}</option>
+              {options.map((item) => (
+                <option key={optionValue(item)} value={optionValue(item)}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <p className="ai-hint">{label.emptyLead}</p>
+          )}
+        </div>
+        {defaultStatus ? <p className="ai-hint">{defaultStatus}</p> : null}
+      </section>
+      )}
 
       {SHOW_MODEL_USAGE && options.length > 0 ? (
         <section className="ai-section">
@@ -492,7 +607,8 @@ export function AiModelsPage() {
         onDisconnect={disconnect}
         onReplace={(providerId) => setDrawer({ mode: "configure", providerId })}
       />
-    </div>
+      </div>
+    </SystemsStage>
   );
 }
 
@@ -593,16 +709,24 @@ function ConfigureBody({
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<"idle" | "ok" | "fail">("idle");
   const [testMessage, setTestMessage] = useState("");
-  const [remoteModels, setRemoteModels] = useState<string[]>(livePath(provider?.kind ?? "custom") ? provider?.models ?? [] : provider?.models ?? []);
+  const [remoteModels, setRemoteModels] = useState<string[]>(provider?.models ?? []);
   const [modelQuery, setModelQuery] = useState("");
+  const [newId] = useState(() => `custom-${Date.now()}`);
   const kind = isAdd ? "custom" : provider?.kind ?? "custom";
-  const endpoint = livePath(kind);
-  const models = endpoint ? remoteModels : catalogFor(kind);
+  const providerId = isAdd ? newId : provider?.id ?? "custom";
+  const endpoint = `/api/ai/providers/${providerId}`;
+  const models = remoteModels.length ? remoteModels : catalogFor(kind);
   const visibleModels = modelQuery.trim()
     ? models.filter((item) => item.toLowerCase().includes(modelQuery.trim().toLowerCase()))
     : models;
   const chosen = customModel.trim() || model;
-  const canSave = Boolean((isAdd ? name.trim() : true) && apiKey.trim().length >= 8 && chosen && test === "ok");
+  const canSave = Boolean(
+    (isAdd ? name.trim() : true) &&
+    apiKey.trim().length >= 8 &&
+    chosen &&
+    (kind !== "custom" || baseUrl.trim()) &&
+    test === "ok",
+  );
 
   async function runTest() {
     if (apiKey.trim().length < 8) {
@@ -610,19 +734,26 @@ function ConfigureBody({
       setTestMessage(label.testNeedKey);
       return;
     }
+    if (kind === "custom" && (!baseUrl.trim() || !chosen)) {
+      setTest("fail");
+      setTestMessage(label.testFail);
+      return;
+    }
     setTesting(true);
     setTest("idle");
     if (endpoint) {
-      const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey, testOnly: true }) });
+      const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey, kind, model: chosen, baseUrl: baseUrl.trim(), testOnly: true }) });
       const data = await response.json().catch(() => ({})) as { error?: string; models?: Array<{ id: string }> };
       setTesting(false);
       if (!response.ok) { setTest("fail"); setTestMessage(data.error || label.testFail); return; }
       const available = (data.models ?? []).map((item) => item.id);
-      setRemoteModels(available);
-      if (!available.includes(model)) setModel(available[0] ?? "");
-      setCustomModel("");
+      if (available.length) {
+        setRemoteModels(available);
+        if (!available.includes(model)) setModel(available[0] ?? "");
+        setCustomModel("");
+      }
       setTest("ok");
-      setTestMessage(`${label.testOk} · ${available.length} models`);
+      setTestMessage(available.length ? `${label.testOk} · ${available.length} models` : label.testOk);
       return;
     }
     window.setTimeout(() => { setTesting(false); setTest("ok"); setTestMessage(label.testOk); }, 520);
@@ -631,14 +762,25 @@ function ConfigureBody({
   async function save() {
     if (!canSave) return;
     if (endpoint) {
-      const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey, model: chosen }) });
+      const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey, model: chosen, kind, name: isAdd ? name.trim() : provider?.name, baseUrl: baseUrl.trim() }) });
       const data = await response.json().catch(() => ({})) as { error?: string; keyLast4?: string; model?: string; lastTestedAt?: string; models?: Array<{ id: string }> };
       if (!response.ok) { setTest("fail"); setTestMessage(data.error || label.testFail); return; }
-      onSave({ ...provider!, connected: true, keyLast4: data.keyLast4 ?? last4(apiKey), model: data.model ?? chosen, lastTestedAt: data.lastTestedAt ?? new Date().toISOString(), models: (data.models ?? []).map((item) => item.id) });
+      onSave({
+        id: providerId,
+        kind,
+        name: isAdd ? name.trim() : provider?.name ?? kind,
+        hint: provider?.hint ?? "OpenAI-compatible API",
+        connected: true,
+        keyLast4: data.keyLast4 ?? last4(apiKey),
+        baseUrl: baseUrl.trim(),
+        model: data.model ?? chosen,
+        lastTestedAt: data.lastTestedAt ?? new Date().toISOString(),
+        models: (data.models ?? []).map((item) => item.id),
+      });
       return;
     }
     onSave({
-      id: isAdd ? `custom-${Date.now()}` : provider!.id,
+      id: providerId,
       kind,
       name: isAdd ? name.trim() : provider!.name,
       hint: isAdd ? "OpenAI-compatible API" : provider!.hint,
@@ -682,12 +824,16 @@ function ConfigureBody({
             data-dialog-initial-focus={isAdd ? undefined : true}
           />
         </label>
-        {!endpoint ? <label className="ai-field">
+        {kind === "custom" ? <label className="ai-field">
           <span>{label.baseUrl}</span>
           <input
             className="ai-input"
             value={baseUrl}
-            onChange={(event) => setBaseUrl(event.target.value)}
+            onChange={(event) => {
+              setBaseUrl(event.target.value);
+              setTest("idle");
+              setTestMessage("");
+            }}
             placeholder={isAdd ? label.customBasePlaceholder : label.basePlaceholder}
           />
           <em>{label.baseOptional}</em>
@@ -709,6 +855,8 @@ function ConfigureBody({
               onChange={(event) => {
                 setModel(event.target.value);
                 setCustomModel("");
+                setTest("idle");
+                setTestMessage("");
               }}
             >
               <option value="">{label.selectModel}</option>
@@ -720,12 +868,16 @@ function ConfigureBody({
             </select>
           </label>
         ) : null}
-        {!endpoint ? <label className="ai-field">
+        {kind === "custom" ? <label className="ai-field">
           <span>{models.length ? `${label.or} ${label.customModel}` : label.customModel}</span>
           <input
             className="ai-input"
             value={customModel}
-            onChange={(event) => setCustomModel(event.target.value)}
+            onChange={(event) => {
+              setCustomModel(event.target.value);
+              setTest("idle");
+              setTestMessage("");
+            }}
             placeholder={label.modelPlaceholder}
           />
         </label> : null}
@@ -777,7 +929,7 @@ function ManageBody({
   const [modelQuery, setModelQuery] = useState("");
   const [modelMessage, setModelMessage] = useState("");
   const blocked = usedBy.length > 0;
-  const endpoint = livePath(provider.kind);
+  const endpoint = livePath(provider.kind, provider.id);
   const listed = modelsFor(provider);
   const visibleModels = modelQuery.trim()
     ? listed.filter((item) => item.toLowerCase().includes(modelQuery.trim().toLowerCase()))

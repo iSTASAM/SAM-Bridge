@@ -1,5 +1,5 @@
-import { AiModelsPage } from "./ai-models-page";
+import { redirect } from "next/navigation";
 
 export default function AiSettingsPage() {
-  return <AiModelsPage />;
+  redirect("/settings/systems/ai");
 }

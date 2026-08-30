@@ -13,12 +13,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const config = getExportConfig(id);
+  const config = await getExportConfig(id);
   if (!config) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
   try {
     const result = await testSlackExport(config);
-    const updated = recordExportRun(id, true);
+    const updated = await recordExportRun(id, true);
     return NextResponse.json({
       ok: true,
       ...result,
@@ -26,7 +26,7 @@ export async function POST(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "SLACK_TEST_FAILED";
-    recordExportRun(id, false, message);
+    await recordExportRun(id, false, message);
     return NextResponse.json({ ok: false, error: message }, { status: 502 });
   }
 }

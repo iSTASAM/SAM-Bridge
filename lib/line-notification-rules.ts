@@ -207,6 +207,10 @@ export type LineNotificationRulePatch = {
   statusTextColor?: string | null;
 };
 
+export async function getLineNotificationRule(id: string) {
+  return (await listLineNotificationRules()).find((rule) => rule.id === id) ?? null;
+}
+
 export async function updateLineNotificationRule(
   id: string,
   lineUserId: string,

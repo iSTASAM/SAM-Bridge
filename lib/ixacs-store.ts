@@ -81,6 +81,8 @@ export type PushEvent = {
   id: string;
   receivedAt: string;
   connectionId: string | null;
+  customerId?: string | null;
+  hasEvent?: boolean;
   companyName: string | null;
   groupUuid: string | null;
   groupName: string | null;

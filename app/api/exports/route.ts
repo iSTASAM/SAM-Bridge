@@ -10,7 +10,12 @@ import { isSlackWebhookUrl } from "@/lib/slack-webhook";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json({ configs: listExportConfigs().map(publicExportConfig) });
+  try {
+    return NextResponse.json({ configs: (await listExportConfigs()).map(publicExportConfig) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "EXPORTS_LOAD_FAILED";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 }
 
 export async function POST(request: Request) {
@@ -30,5 +35,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "SAP_CONNECTION_REQUIRED" }, { status: 400 });
     }
   }
-  return NextResponse.json(publicExportConfig(createExportConfig(body)), { status: 201 });
+  try {
+    return NextResponse.json(publicExportConfig(await createExportConfig(body)), { status: 201 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "EXPORTS_SAVE_FAILED";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 }

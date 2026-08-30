@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   FiBell,
+  FiGrid,
   FiHome,
   FiInbox,
   FiKey,
@@ -13,9 +14,9 @@ import {
   FiSend,
   FiSidebar,
   FiServer,
-  FiCpu,
 } from "react-icons/fi";
 import { OpenAIIcon } from "./flow/ai-icons";
+import { APP_VERSION } from "@/lib/app-version";
 import { useLocale } from "./locale-context";
 import { AppToolbar } from "./app-toolbar";
 import { SIDEBAR_HIDDEN_STORAGE_KEY } from "./sidebar-pref";
@@ -31,6 +32,7 @@ const COPY = {
     gptActions: "GPT Actions",
     exports: "Data Export",
     notifications: "Notifications",
+    systems: "Admin Systems",
     logout: "ออกจากระบบ",
     openMenu: "เปิดเมนู",
     closeMenu: "ปิดเมนู",
@@ -49,6 +51,7 @@ const COPY = {
     gptActions: "GPT Actions",
     exports: "Data Export",
     notifications: "Notifications",
+    systems: "Admin Systems",
     logout: "Log out",
     openMenu: "Open menu",
     closeMenu: "Close menu",
@@ -67,6 +70,7 @@ const COPY = {
     gptActions: "GPT Actions",
     exports: "Data Export",
     notifications: "Notifications",
+    systems: "Admin Systems",
     logout: "ログアウト",
     openMenu: "メニューを開く",
     closeMenu: "メニューを閉じる",
@@ -133,10 +137,10 @@ export function AppSidebar({
     { href: "/settings/push", label: copy.push, exact: false, icon: FiKey },
     ...(session?.role === "admin" ? [
       { href: "/settings/sources", label: copy.sources, exact: false, icon: FiInbox },
-      { href: "/settings/ai", label: copy.models, exact: false, icon: FiCpu },
       { href: "/settings/gpt-actions", label: copy.gptActions, exact: false, icon: OpenAIIcon },
       { href: "/settings/exports", label: copy.exports, exact: false, icon: FiSend },
       { href: "/settings/notifications", label: copy.notifications, exact: false, icon: FiBell },
+      { href: "/settings/systems", label: copy.systems, exact: false, icon: FiGrid },
     ] : []),
   ] as const;
 
@@ -176,9 +180,11 @@ export function AppSidebar({
         className={`app-sidebar ${open ? "is-open" : ""} ${hidden ? "is-hidden" : ""}`}
       >
         <div className="app-sidebar-head">
-          <Link href="/home" className="app-sidebar-brand" onClick={() => setOpen(false)}>
-            {copy.brand}
-          </Link>
+          <div className="app-sidebar-brand-wrap">
+            <Link href="/home" className="app-sidebar-brand" onClick={() => setOpen(false)}>
+              {copy.brand}
+            </Link>
+          </div>
           <button
             type="button"
             className="app-icon-btn app-sidebar-hide"
@@ -234,6 +240,7 @@ export function AppSidebar({
             <FiLogOut size={16} />
           </button>
         </div>
+        <p className="app-sidebar-version">v{APP_VERSION}</p>
       </aside>
     </>
   );

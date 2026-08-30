@@ -13,12 +13,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const config = getExportConfig(id);
+  const config = await getExportConfig(id);
   if (!config) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
   try {
     const result = await runSlackExport(config);
-    const updated = recordExportRun(id, true);
+    const updated = await recordExportRun(id, true);
     return NextResponse.json({
       ok: true,
       rowCount: result.rowCount,
@@ -30,7 +30,7 @@ export async function POST(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "EXPORT_FAILED";
-    recordExportRun(id, false, message);
+    await recordExportRun(id, false, message);
     const badRequest = [
       "SLACK_ONLY",
       "INVALID_SLACK_WEBHOOK_URL",

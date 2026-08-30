@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const config = getExportConfig(id);
+  const config = await getExportConfig(id);
   if (!config) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
 
   try {

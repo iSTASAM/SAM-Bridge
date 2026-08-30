@@ -47,14 +47,14 @@ function isTabularExportApi(pathname: string) {
 }
 
 function isAdminPage(pathname: string) {
-  return ["/settings/sources", "/settings/ai", "/settings/gpt-actions", "/settings/exports", "/settings/notifications", "/settings/line-webhook"].some(
+  return ["/settings/sources", "/settings/ai", "/settings/gpt-actions", "/settings/exports", "/settings/notifications", "/settings/line-webhook", "/settings/systems"].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 }
 
 function isAdminApi(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (["/api/sources", "/api/ai/chat", "/api/ai/openrouter", "/api/ai/gemini", "/api/gpt-actions/settings", "/api/exports", "/api/notifications", "/api/line/webhook-settings", "/api/line-users"].some(
+  if (["/api/sources", "/api/ai", "/api/gpt-actions/settings", "/api/exports", "/api/notifications", "/api/line/webhook-settings", "/api/line-users", "/api/admin/systems", "/api/admin/accounts"].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   )) return true;
   const isDataRead =

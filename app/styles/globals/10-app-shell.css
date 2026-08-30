@@ -61,6 +61,11 @@
   padding: 2px 4px 0;
 }
 
+.app-sidebar-brand-wrap {
+  display: grid;
+  min-width: 0;
+}
+
 .app-sidebar-brand {
   min-width: 0;
   overflow: hidden;
@@ -72,6 +77,14 @@
   font-size: 18px;
   font-weight: 500;
   letter-spacing: -0.03em;
+}
+
+.app-sidebar-version {
+  margin: 8px 4px 0;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 450;
+  letter-spacing: 0.02em;
 }
 
 .app-sidebar-brand:hover {
@@ -88,9 +101,11 @@
   justify-content: center;
 }
 
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-brand-wrap,
 :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-brand,
 :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-label,
-:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-user-copy {
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-user-copy,
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-version {
   display: none;
 }
 
@@ -362,9 +377,14 @@
     justify-content: space-between;
   }
 
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-brand-wrap {
+    display: grid;
+  }
+
   :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-brand,
   :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-label,
-  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-user-copy {
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-user-copy,
+  :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-version {
     display: unset;
   }
 

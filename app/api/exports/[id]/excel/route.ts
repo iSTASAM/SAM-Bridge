@@ -51,7 +51,7 @@ async function fetchExcelTable(request: Request, id: string, apiKey: string, tab
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const config = getExportConfig(id);
+  const config = await getExportConfig(id);
   if (!config) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   if (config.destinationType !== "excel") {
     return NextResponse.json({ error: "NOT_AN_EXCEL_EXPORT" }, { status: 400 });
@@ -75,7 +75,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const buffer = await buildExcelWorkbook(sheets);
     const filename = excelFilename(config.name);
-    recordExportRun(id, true);
+    await recordExportRun(id, true);
     return new NextResponse(buffer, {
       status: 200,
       headers: {
@@ -86,7 +86,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "EXCEL_EXPORT_FAILED";
-    recordExportRun(id, false, message);
+    await recordExportRun(id, false, message);
     return NextResponse.json({ ok: false, error: message }, { status: 502 });
   }
 }

@@ -1,26 +1,26 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import path from "path";
+import { deleteAiProvider, getAiProvider, saveAiProvider } from "@/lib/ai-providers";
 
 type GeminiSettings = { apiKey: string; model: string; updatedAt: string };
-const FILE = path.join(process.cwd(), "data", "gemini-settings.json");
 
-export function getGeminiSettings(): GeminiSettings | null {
-  if (!existsSync(FILE)) return null;
-  try {
-    const value = JSON.parse(readFileSync(FILE, "utf8")) as Partial<GeminiSettings>;
-    return value.apiKey && value.model ? { apiKey: value.apiKey, model: value.model, updatedAt: value.updatedAt ?? "" } : null;
-  } catch { return null; }
+export async function getGeminiSettings(): Promise<GeminiSettings | null> {
+  const row = await getAiProvider("gemini");
+  if (!row?.apiKey || !row.model) return null;
+  return { apiKey: row.apiKey, model: row.model, updatedAt: row.updatedAt };
 }
 
-export function saveGeminiSettings(apiKey: string, model: string) {
-  mkdirSync(path.dirname(FILE), { recursive: true });
-  const value = { apiKey, model, updatedAt: new Date().toISOString() };
-  writeFileSync(FILE, JSON.stringify(value, null, 2), { encoding: "utf8", mode: 0o600 });
-  return value;
+export async function saveGeminiSettings(apiKey: string, model: string) {
+  const saved = await saveAiProvider({
+    id: "gemini",
+    kind: "gemini",
+    name: "Google Gemini",
+    apiKey,
+    model,
+  });
+  return { apiKey, model, updatedAt: saved.updatedAt };
 }
 
-export function deleteGeminiSettings() {
-  if (existsSync(FILE)) writeFileSync(FILE, "{}", { encoding: "utf8", mode: 0o600 });
+export async function deleteGeminiSettings() {
+  await deleteAiProvider("gemini");
 }
 
 export async function listGeminiModels(apiKey: string) {

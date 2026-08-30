@@ -6,7 +6,7 @@ import { FiMessageCircle, FiSend, FiX } from "react-icons/fi";
 import { useLocale } from "../../locale-context";
 
 type Message = { role: "user" | "assistant"; text: string; meta?: string };
-type ChatProvider = "openrouter" | "gemini";
+type ChatProvider = string;
 type ChatOption = { provider: ChatProvider; name: string; model: string };
 
 const STORAGE_KEY = "sam.chat.model";
@@ -29,7 +29,6 @@ export function DataAiChat({ connectionIds, dateQuery }: { connectionIds: string
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setModelsLoading(true);
     void fetch("/api/ai/models", { cache: "no-store" }).then(async (response) => {
       const data = await response.json().catch(() => ({})) as { options?: ChatOption[] };
       if (cancelled) return;
@@ -80,7 +79,7 @@ export function DataAiChat({ connectionIds, dateQuery }: { connectionIds: string
   }
 
   return <>
-    <button type="button" className="dx-ai-fab" onClick={() => setOpen(true)} aria-label="Production AI"><FiMessageCircle size={20} /><span>Production AI</span></button>
+    <button type="button" className="dx-ai-fab" onClick={() => { setModelsLoading(true); setOpen(true); }} aria-label="Production AI"><FiMessageCircle size={20} /><span>Production AI</span></button>
     {open ? <aside className="dx-ai-panel" aria-label="Production AI chat">
       <header>
         <div>
@@ -92,7 +91,7 @@ export function DataAiChat({ connectionIds, dateQuery }: { connectionIds: string
       <div className="dx-ai-modelbar">
         {modelsLoading ? <p className="dx-ai-model-hint">{labels.loading}</p> : null}
         {!modelsLoading && !options.length ? (
-          <p className="dx-ai-model-hint">{labels.empty} <Link href="/settings/ai">{labels.settings}</Link></p>
+          <p className="dx-ai-model-hint">{labels.empty} <Link href="/settings/systems/ai">{labels.settings}</Link></p>
         ) : null}
         {!modelsLoading && options.length ? (
           <label>

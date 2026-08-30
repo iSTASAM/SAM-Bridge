@@ -63,7 +63,9 @@ function dateLocale(locale: Locale) {
 }
 
 function formatLastUpdate(iso: string, locale: Locale) {
+  if (!iso) return "—";
   const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
   const loc = dateLocale(locale);
   const now = new Date();
   const sameDay = date.toDateString() === now.toDateString();
@@ -72,11 +74,46 @@ function formatLastUpdate(iso: string, locale: Locale) {
 }
 
 function formatReceived(iso: string, locale: Locale) {
+  if (!iso) return "—";
   const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
   const loc = dateLocale(locale);
   const day = date.toLocaleDateString(loc, { day: "numeric", month: "short", year: "numeric" });
   const time = date.toLocaleTimeString(loc, { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
   return `${day} · ${time}`;
+}
+
+function canChangeStatus(event: PushEvent) {
+  return Boolean(event.connectionId && event.lineUuid);
+}
+
+function mapCatalogStatus(item: {
+  uuid: string;
+  name?: string | null;
+  nameTh?: string | null;
+  nameEn?: string | null;
+  nameJa?: string | null;
+  backgroundColor?: string | null;
+  textColor?: string | null;
+  bgColor?: string | null;
+  fontColor?: string | null;
+  blinking?: boolean;
+  blinkingBackgroundColor?: string | null;
+  blinkingTextColor?: string | null;
+  blinkingBgColor?: string | null;
+  blinkingFontColor?: string | null;
+}): LineStatus {
+  return {
+    uuid: item.uuid,
+    nameTh: item.nameTh || item.name || "",
+    nameEn: item.nameEn || item.name || "",
+    nameJa: item.nameJa || item.name || "",
+    bgColor: item.backgroundColor || item.bgColor || "",
+    fontColor: item.textColor || item.fontColor || "",
+    blinking: Boolean(item.blinking),
+    blinkingBgColor: item.blinkingBackgroundColor ?? item.blinkingBgColor ?? null,
+    blinkingFontColor: item.blinkingTextColor ?? item.blinkingFontColor ?? null,
+  };
 }
 
 function prettyPayload(value: string) {
@@ -280,11 +317,33 @@ export function PushEventViewer() {
     setStatusQuery("");
     setStatusPick(null);
     try {
-      const response = await fetch(`/api/lines/${event.lineUuid}`, { cache: "no-store" });
-      const data = (await response.json()) as { andonStatusStyleUuid?: string | null; statuses?: LineStatus[]; error?: string };
+      const response = await fetch(`/api/connections/${event.connectionId}/statuses`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          customerId: event.customerId || undefined,
+          lineUuid: event.lineUuid,
+          groupUuid: event.groupUuid || undefined,
+        }),
+      });
+      const data = (await response.json()) as {
+        statuses?: Parameters<typeof mapCatalogStatus>[0][];
+        statusesByLine?: Record<string, Parameters<typeof mapCatalogStatus>[0][]>;
+        error?: string;
+      };
       if (!response.ok) throw new Error(data.error);
-      const currentUuid = data.andonStatusStyleUuid ?? event.statusUuid ?? null;
-      setStatusPanel({ event, currentUuid, statuses: data.statuses ?? [] });
+      const raw = data.statuses?.length
+        ? data.statuses
+        : data.statusesByLine?.[event.lineUuid] ?? [];
+      const statuses = raw.map(mapCatalogStatus);
+      if (statuses.length === 0) {
+        const fallback = await fetch(`/api/lines/${event.lineUuid}`, { cache: "no-store" });
+        const board = (await fallback.json()) as { andonStatusStyleUuid?: string | null; statuses?: LineStatus[]; error?: string };
+        if (!fallback.ok) throw new Error(board.error);
+        setStatusPanel({ event, currentUuid: event.statusUuid ?? board.andonStatusStyleUuid ?? null, statuses: board.statuses ?? [] });
+      } else {
+        setStatusPanel({ event, currentUuid: event.statusUuid ?? null, statuses });
+      }
       setStatusPick(null);
     } catch {
       setStatusError("ไม่สามารถโหลดรายการสถานะได้");
@@ -413,7 +472,7 @@ export function PushEventViewer() {
             ))}
           </div>
         ) : events.length === 0 ? (
-          <div className="pe-empty">ยังไม่มีข้อมูล Push ตามเงื่อนไขนี้</div>
+          <div className="pe-empty">ยังไม่มีไลน์ที่ตั้งค่าบน Push API ตามเงื่อนไขนี้</div>
         ) : (
           <>
             <div className="pe-table-wrap">
@@ -446,13 +505,13 @@ export function PushEventViewer() {
                       type="button"
                       className={`pe-status pe-status-chip ${event.statusBlinking ? "is-blinking" : ""}`}
                       style={eventStatusVars(event)}
-                      disabled={!event.accepted || !event.lineUuid || statusLoading}
+                      disabled={!canChangeStatus(event) || statusLoading}
                       onClick={(clickEvent) => {
                         clickEvent.stopPropagation();
                         void openStatuses(event);
                       }}
                     >
-                      <span className="pe-status-label">{localizedStatus(event, locale)}</span>
+                      <span className="pe-status-label">{event.statusUuid ? localizedStatus(event, locale) : "—"}</span>
                     </button>
                     <time className="pe-cell-muted" dateTime={event.receivedAt}>{formatLastUpdate(event.receivedAt, locale)}</time>
                     <div className="pe-actions">
@@ -491,7 +550,7 @@ export function PushEventViewer() {
           role="menu"
           style={{ top: menuPos.top, left: menuPos.left }}
         >
-          <button type="button" role="menuitem" disabled={!menuEvent.accepted || !menuEvent.lineUuid || statusLoading} onClick={() => { setMenuId(null); void openStatuses(menuEvent); }}>Change status</button>
+          <button type="button" role="menuitem" disabled={!canChangeStatus(menuEvent) || statusLoading} onClick={() => { setMenuId(null); void openStatuses(menuEvent); }}>Change status</button>
           <button type="button" role="menuitem" onClick={() => { setMenuId(null); void copyUuid(menuEvent); }}>{copied ? "Copied" : "Copy UUID"}</button>
           <button type="button" role="menuitem" className="is-danger" disabled={deletingId === menuEvent.id} onClick={() => { void removeEvent(menuEvent); }}>Delete event</button>
         </div>,
@@ -516,7 +575,7 @@ export function PushEventViewer() {
                   <dt>Status</dt>
                   <dd>
                     <span className={`pe-status pe-status-chip ${selected.statusBlinking ? "is-blinking" : ""}`} style={eventStatusVars(selected)}>
-                      <span className="pe-status-label">{localizedStatus(selected, locale)}</span>
+                      <span className="pe-status-label">{selected.statusUuid ? localizedStatus(selected, locale) : "—"}</span>
                     </span>
                   </dd>
                 </div>
@@ -532,7 +591,7 @@ export function PushEventViewer() {
               <pre className="pe-drawer-payload">{prettyPayload(selected.payloadPreview)}</pre>
             </div>
             <footer className="pac-drawer-foot">
-              <button type="button" className="btn btn-secondary" disabled={!selected.accepted || !selected.lineUuid || statusLoading} onClick={() => void openStatuses(selected)}>Change status</button>
+              <button type="button" className="btn btn-secondary" disabled={!canChangeStatus(selected) || statusLoading} onClick={() => void openStatuses(selected)}>Change status</button>
               <button type="button" className="btn-icon" aria-label={copied ? "Copied" : "Copy UUID"} onClick={() => void copyUuid(selected)}>
                 {copied ? <FiCheck size={16} /> : <FiCopy size={16} />}
               </button>

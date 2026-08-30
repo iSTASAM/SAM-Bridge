@@ -15,9 +15,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const config = getExportConfig(id);
-  if (!config) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(publicExportConfig(config));
+  try {
+    const config = await getExportConfig(id);
+    if (!config) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(publicExportConfig(config));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "EXPORTS_LOAD_FAILED";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 }
 
 export async function PATCH(
@@ -26,7 +31,13 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const current = getExportConfig(id);
+  let current;
+  try {
+    current = await getExportConfig(id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "EXPORTS_LOAD_FAILED";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
   if (!current) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const destinationType =
     typeof body.destinationType === "string" ? body.destinationType : current.destinationType;
@@ -51,9 +62,14 @@ export async function PATCH(
       return NextResponse.json({ error: "SAP_CONNECTION_REQUIRED" }, { status: 400 });
     }
   }
-  const config = updateExportConfig(id, body);
-  if (!config) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(publicExportConfig(config));
+  try {
+    const config = await updateExportConfig(id, body);
+    if (!config) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(publicExportConfig(config));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "EXPORTS_SAVE_FAILED";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 }
 
 export async function DELETE(
@@ -61,8 +77,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  if (!deleteExportConfig(id)) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  try {
+    if (!(await deleteExportConfig(id))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "EXPORTS_DELETE_FAILED";
+    return NextResponse.json({ error: message }, { status: 503 });
   }
-  return NextResponse.json({ ok: true });
 }

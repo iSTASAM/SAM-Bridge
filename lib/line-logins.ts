@@ -60,6 +60,28 @@ function writeFileStore(logins: Record<string, LineLoginRecord>) {
   }
 }
 
+export async function listLineLogins(): Promise<LineLoginRecord[]> {
+  if (supabaseConfigured()) {
+    try {
+      const supabase = getSupabaseAdmin();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("line_logins")
+          .select("*")
+          .order("last_login_at", { ascending: false });
+        if (error) throw error;
+        return ((data ?? []) as DbRow[])
+          .map(rowToRecord)
+          .filter((row): row is LineLoginRecord => row !== null && isRealLineUserId(row.lineUserId));
+      }
+    } catch (error) {
+      console.warn("listLineLogins failed:", error);
+    }
+  }
+
+  return Object.values(readFileStore()).filter((row) => isRealLineUserId(row.lineUserId));
+}
+
 export async function getLineLogin(lineUserId: string): Promise<LineLoginRecord | null> {
   if (!isRealLineUserId(lineUserId)) return null;
 
@@ -82,6 +104,26 @@ export async function getLineLogin(lineUserId: string): Promise<LineLoginRecord 
   }
 
   return readFileStore()[lineUserId] ?? null;
+}
+
+/** Authorization checks fail closed when the configured durable store is unavailable. */
+export async function getLineLoginForAuthorization(lineUserId: string): Promise<LineLoginRecord | null> {
+  if (!isRealLineUserId(lineUserId)) return null;
+  if (!supabaseConfigured()) return readFileStore()[lineUserId] ?? null;
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from("line_logins")
+      .select("*")
+      .eq("line_user_id", lineUserId)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? rowToRecord(data as DbRow) : null;
+  } catch (error) {
+    console.warn("LINE authorization lookup failed closed:", error);
+    return null;
+  }
 }
 
 export async function markLineLoggedIn(input: {

@@ -1,11 +1,30 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import path from "path";
+import { deleteAiProvider, getAiProvider, saveAiProvider } from "@/lib/ai-providers";
 
 export type OpenRouterSettings = { apiKey: string; model: string; updatedAt: string };
 export type OpenRouterModel = { id: string; name: string };
 
-const FILE = path.join(process.cwd(), "data", "openrouter-settings.json");
 const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
+
+export async function getOpenRouterSettings(): Promise<OpenRouterSettings | null> {
+  const row = await getAiProvider("openrouter");
+  if (!row?.apiKey || !row.model) return null;
+  return { apiKey: row.apiKey, model: row.model, updatedAt: row.updatedAt };
+}
+
+export async function saveOpenRouterSettings(apiKey: string, model: string) {
+  const saved = await saveAiProvider({
+    id: "openrouter",
+    kind: "openrouter",
+    name: "OpenRouter",
+    apiKey,
+    model,
+  });
+  return { apiKey, model, updatedAt: saved.updatedAt };
+}
+
+export async function deleteOpenRouterSettings() {
+  await deleteAiProvider("openrouter");
+}
 
 function openRouterHeaders(apiKey: string) {
   return {
@@ -14,29 +33,6 @@ function openRouterHeaders(apiKey: string) {
     "http-referer": process.env.OPENROUTER_REFERER ?? "http://localhost:4525",
     "x-title": "SAM Bridge",
   };
-}
-
-export function getOpenRouterSettings(): OpenRouterSettings | null {
-  if (!existsSync(FILE)) return null;
-  try {
-    const value = JSON.parse(readFileSync(FILE, "utf8")) as Partial<OpenRouterSettings>;
-    return value.apiKey && value.model
-      ? { apiKey: value.apiKey, model: value.model, updatedAt: value.updatedAt ?? "" }
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-export function saveOpenRouterSettings(apiKey: string, model: string) {
-  mkdirSync(path.dirname(FILE), { recursive: true });
-  const value = { apiKey, model, updatedAt: new Date().toISOString() };
-  writeFileSync(FILE, JSON.stringify(value, null, 2), { encoding: "utf8", mode: 0o600 });
-  return value;
-}
-
-export function deleteOpenRouterSettings() {
-  if (existsSync(FILE)) writeFileSync(FILE, "{}", { encoding: "utf8", mode: 0o600 });
 }
 
 export async function listOpenRouterModels(apiKey: string): Promise<OpenRouterModel[]> {
