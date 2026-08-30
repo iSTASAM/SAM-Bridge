@@ -122,13 +122,13 @@ async function observe(
       (!connectionId || rule.connectionId === connectionId),
   );
   for (const rule of matching) {
-    const alreadyObserved = rule.observedStatusUuid === statusUuid;
-    if (alreadyObserved && statusUuid !== rule.statusUuid) continue;
-    if (alreadyObserved && rule.lastNotifiedAt) continue;
-    if (alreadyObserved && !rule.lastNotifiedAt) {
-      const ageMs = Date.now() - Date.parse(rule.updatedAt);
-      if (Number.isFinite(ageMs) && ageMs < 60_000) continue;
+    // Same non-target status already recorded — nothing to do.
+    if (rule.observedStatusUuid === statusUuid && statusUuid !== rule.statusUuid) continue;
+    // Already notified for this continuous stay in the target status.
+    if (rule.observedStatusUuid === statusUuid && statusUuid === rule.statusUuid && rule.lastNotifiedAt) {
+      continue;
     }
+
     const state = await rememberLineNotificationObservation(rule, statusUuid, observedAt);
     rule.observedStatusUuid = statusUuid;
     rule.statusStartedAt = state.statusStartedAt;

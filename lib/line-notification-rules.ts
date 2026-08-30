@@ -148,16 +148,20 @@ export async function createLineNotificationRule(input: NewLineNotificationRule)
   if (!input.lineUserId || !input.connectionId || !input.lineUuid || !input.statusUuid) throw new Error("INVALID_RULE");
   if (durationMinutes < 0 || durationMinutes > 1440) throw new Error("INVALID_DURATION");
   const now = new Date().toISOString();
+  const existing = (await listLineNotificationRules(input.lineUserId)).find(
+    (item) => item.lineUuid === input.lineUuid && item.statusUuid === input.statusUuid,
+  );
   const rule: LineNotificationRule = {
     ...input,
-    id: randomUUID(),
+    id: existing?.id ?? randomUUID(),
     durationMinutes,
     statusTextColor: input.statusTextColor ?? null,
     enabled: true,
+    // Always reset watch state so saving/re-saving a rule can fire again.
     observedStatusUuid: null,
     statusStartedAt: null,
     lastNotifiedAt: null,
-    createdAt: now,
+    createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
 
@@ -179,15 +183,25 @@ export async function createLineNotificationRule(input: NewLineNotificationRule)
           .single());
       }
       if (error) throw new Error(`LINE_NOTIFICATION_RULE_CREATE_FAILED: ${error.message}`);
-      return rowToRule(data as RuleRow);
+      // Force-clear notification latch even if upsert ignored nulls.
+      const saved = rowToRule(data as RuleRow);
+      if (saved.lastNotifiedAt || saved.observedStatusUuid) {
+        await supabase
+          .from("line_notification_rules")
+          .update({
+            observed_status_uuid: null,
+            status_started_at: null,
+            last_notified_at: null,
+            updated_at: now,
+          })
+          .eq("id", saved.id);
+        return { ...saved, observedStatusUuid: null, statusStartedAt: null, lastNotifiedAt: null, updatedAt: now };
+      }
+      return saved;
     }
   }
 
   const rules = readFileRules();
-  const existing = Object.values(rules).find(
-    (item) => item.lineUserId === input.lineUserId && item.lineUuid === input.lineUuid && item.statusUuid === input.statusUuid,
-  );
-  if (existing) rule.id = existing.id;
   rules[rule.id] = rule;
   writeFileRules(rules);
   return rule;
@@ -222,7 +236,8 @@ export async function updateLineNotificationRule(
   if (durationMinutes < 0 || durationMinutes > 1440) throw new Error("INVALID_DURATION");
   const targetChanged =
     (input.lineUuid !== undefined && input.lineUuid !== current.lineUuid) ||
-    (input.statusUuid !== undefined && input.statusUuid !== current.statusUuid);
+    (input.statusUuid !== undefined && input.statusUuid !== current.statusUuid) ||
+    input.statusUuid !== undefined;
   const next: LineNotificationRule = {
     ...current,
     durationMinutes,

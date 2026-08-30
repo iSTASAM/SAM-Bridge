@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
+import { connectionAsTarget, getCtMonitorData, summarizeMonitorJson } from "@/lib/ixacs-client";
 import { getConnection } from "@/lib/ixacs-connections";
 import {
   createLineNotificationRule,
@@ -19,6 +20,15 @@ async function authenticatedContext() {
   const connection = await getConnection(session.connectionId);
   if (!connection || connection.loginId.trim().toLowerCase() !== session.loginId.trim().toLowerCase()) return null;
   return { session, connection };
+}
+
+async function liveStatusUuid(connectionId: string, lineUuid: string, fallback: string) {
+  const connection = await getConnection(connectionId);
+  if (!connection) return fallback || null;
+  const monitor = await getCtMonitorData(connectionAsTarget(connection), [lineUuid], { realTime: true });
+  if (!monitor.ok) return fallback || null;
+  const row = summarizeMonitorJson(monitor.responseJson).find((item) => item.uuid === lineUuid);
+  return row?.statusUuid ?? (fallback || null);
 }
 
 export async function GET() {
@@ -79,9 +89,10 @@ export async function POST(request: Request) {
       statusTextColor: target.statusTextColor,
       durationMinutes: 0,
     });
-    if (currentStatusUuid) {
+    const seedStatus = await liveStatusUuid(context.connection.id, target.lineUuid, currentStatusUuid);
+    if (seedStatus) {
       try {
-        await dispatchLineStatusChange(target.lineUuid, currentStatusUuid, new Date().toISOString(), context.connection.id);
+        await dispatchLineStatusChange(target.lineUuid, seedStatus, new Date().toISOString(), context.connection.id);
       } catch (error) {
         console.warn("LINE notification after saving rule failed:", error);
       }

@@ -45,9 +45,14 @@ export async function PATCH(request: Request, context: RouteContext<"/line/api/n
       ...target,
     });
     if (!rule) return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
-    if (target && currentStatusUuid) {
+    if (target) {
       try {
-        await dispatchLineStatusChange(target.lineUuid, currentStatusUuid, new Date().toISOString(), auth.connection.id);
+        await dispatchLineStatusChange(
+          target.lineUuid,
+          currentStatusUuid || target.statusUuid,
+          new Date().toISOString(),
+          auth.connection.id,
+        );
       } catch (error) {
         console.warn("LINE notification after updating rule failed:", error);
       }

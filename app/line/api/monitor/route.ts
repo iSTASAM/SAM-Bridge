@@ -1,19 +1,21 @@
 import { cookies } from "next/headers";
 import { after, NextResponse } from "next/server";
 import { LINE_AUTH_COOKIE, readLineSessionToken } from "@/lib/line-auth";
-import { getConnection } from "@/lib/ixacs-connections";
+import { getConnection, rememberConnectionLines } from "@/lib/ixacs-connections";
 import {
   connectionAsTarget,
+  discoverIxacsLines,
   getCtMonitorData,
   summarizeMonitorJson,
 } from "@/lib/ixacs-client";
+import { listLineNotificationRules } from "@/lib/line-notification-rules";
 import { dispatchLineStatusSnapshots } from "@/lib/line-notification-runner";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Lightweight realtime snapshot for the LINE portal board.
- * Only hits iXacs ctMonitor — no catalog rediscovery or per-line board reads.
+ * Also drives LINE bot alert cards from the same iXacs status snapshot.
  */
 export async function GET() {
   const session = await readLineSessionToken((await cookies()).get(LINE_AUTH_COOKIE)?.value);
@@ -26,7 +28,23 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const lineUuids = connection.lineUuids;
+  let lineUuids = connection.lineUuids;
+  if (lineUuids.length === 0) {
+    const discovery = await discoverIxacsLines(connectionAsTarget(connection));
+    lineUuids = discovery.lineUuids.length
+      ? discovery.lineUuids
+      : discovery.groups.flatMap((group) => group.lines.map((line) => line.uuid));
+    if (lineUuids.length > 0) {
+      void rememberConnectionLines(connection.id, lineUuids).catch(() => undefined);
+    }
+  }
+
+  // Always include lines that already have notification rules for this connection.
+  const ruleLines = (await listLineNotificationRules(session.lineUserId))
+    .filter((rule) => rule.enabled && rule.connectionId === connection.id)
+    .map((rule) => rule.lineUuid);
+  lineUuids = [...new Set([...lineUuids, ...ruleLines])];
+
   if (lineUuids.length === 0) {
     return NextResponse.json({ ok: true, lines: [], receivedAt: new Date().toISOString() });
   }
