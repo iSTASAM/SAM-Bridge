@@ -106,6 +106,42 @@ async function notifyRule(rule: LineNotificationRule, observedAt: string) {
   await markLineNotificationSent(rule.id, observedAt);
 }
 
+function rulesForLine(rules: LineNotificationRule[], lineUuid: string, connectionId: string) {
+  return rules.filter((rule) => {
+    if (!rule.enabled || rule.lineUuid !== lineUuid) return false;
+    if (!isLineMessagingUserId(rule.lineUserId)) {
+      console.warn("LINE notification skip: rule user is not a Messaging API user id", {
+        ruleId: rule.id,
+        lineUserId: rule.lineUserId,
+      });
+      return false;
+    }
+    if (connectionId && rule.connectionId && rule.connectionId !== connectionId) {
+      console.warn("LINE notification: connectionId differs; matching by lineUuid anyway", {
+        ruleId: rule.id,
+        ruleConnectionId: rule.connectionId,
+        eventConnectionId: connectionId,
+        lineUuid,
+      });
+    }
+    return true;
+  });
+}
+
+async function resolveLiveStatusUuid(connectionId: string, lineUuid: string, fallback: string | null) {
+  if (!connectionId || !lineUuid) return fallback;
+  try {
+    const connection = await getConnection(connectionId);
+    if (!connection?.baseUrl) return fallback;
+    const live = await getCtMonitorData(connectionAsTarget(connection), [lineUuid], { realTime: true });
+    if (!live.ok) return fallback;
+    return summarizeMonitorJson(live.responseJson).find((row) => row.uuid === lineUuid)?.statusUuid ?? fallback;
+  } catch (error) {
+    console.warn("LINE notification live-status resolve failed:", error);
+    return fallback;
+  }
+}
+
 async function observe(
   rules: LineNotificationRule[],
   connectionId: string,
@@ -114,13 +150,16 @@ async function observe(
   observedAt: string,
 ) {
   let sent = 0;
-  const matching = rules.filter(
-    (rule) =>
-      rule.enabled &&
-      rule.lineUuid === lineUuid &&
-      isLineMessagingUserId(rule.lineUserId) &&
-      (!connectionId || rule.connectionId === connectionId),
-  );
+  const matching = rulesForLine(rules, lineUuid, connectionId);
+  if (!matching.length) {
+    console.log("LINE notification skip: no enabled Messaging-API rules for line", { lineUuid, connectionId });
+    return 0;
+  }
+  if (!statusUuid) {
+    console.warn("LINE notification skip: missing statusUuid", { lineUuid, connectionId, rules: matching.length });
+    return 0;
+  }
+
   for (const rule of matching) {
     // Same non-target status already recorded — nothing to do.
     if (rule.observedStatusUuid === statusUuid && statusUuid !== rule.statusUuid) continue;
@@ -133,15 +172,29 @@ async function observe(
     rule.observedStatusUuid = statusUuid;
     rule.statusStartedAt = state.statusStartedAt;
     rule.lastNotifiedAt = state.lastNotifiedAt;
-    if (statusUuid !== rule.statusUuid || state.lastNotifiedAt) {
+    if (statusUuid !== rule.statusUuid) {
+      console.log("LINE notification watch:", {
+        ruleId: rule.id,
+        lineUuid,
+        observed: statusUuid,
+        waitingFor: rule.statusUuid,
+      });
       continue;
     }
+    if (state.lastNotifiedAt) continue;
+
     // durationMinutes <= 0 → fire as soon as the target status is observed.
-    // durationMinutes > 0 → require the status to persist that long (needs frequent monitor ticks).
     const holdMs = Math.max(0, rule.durationMinutes) * 60_000;
     if (holdMs > 0) {
       const startedAt = Date.parse(state.statusStartedAt ?? observedAt);
-      if (!Number.isFinite(startedAt) || Date.now() - startedAt < holdMs) continue;
+      if (!Number.isFinite(startedAt) || Date.now() - startedAt < holdMs) {
+        console.log("LINE notification hold:", {
+          ruleId: rule.id,
+          durationMinutes: rule.durationMinutes,
+          statusStartedAt: state.statusStartedAt,
+        });
+        continue;
+      }
     }
     try {
       await notifyRule(rule, observedAt);
@@ -149,6 +202,7 @@ async function observe(
       sent += 1;
       console.log("LINE notification card sent", {
         ruleId: rule.id,
+        lineUserId: rule.lineUserId,
         lineUuid: rule.lineUuid,
         statusUuid,
       });
@@ -156,6 +210,7 @@ async function observe(
       console.warn("LINE notification send failed:", {
         ruleId: rule.id,
         lineUuid: rule.lineUuid,
+        lineUserId: rule.lineUserId,
         error: error instanceof Error ? error.message : error,
       });
     }
@@ -174,7 +229,7 @@ export async function dispatchLineStatusChange(
 }
 
 export async function dispatchLineStatusSnapshots(
-  snapshots: Array<{ lineUuid: string; statusUuid: string | null }>,
+  snapshots: Array<{ lineUuid: string; statusUuid: string | null; connectionId?: string | null }>,
   observedAt = new Date().toISOString(),
   connectionId?: string | null,
 ) {
@@ -184,34 +239,53 @@ export async function dispatchLineStatusSnapshots(
   let sent = 0;
   for (const snapshot of snapshots) {
     if (!snapshot.lineUuid || !wanted.has(snapshot.lineUuid)) continue;
-    sent += await observe(rules, connectionId ?? "", snapshot.lineUuid, snapshot.statusUuid, observedAt);
+    sent += await observe(
+      rules,
+      snapshot.connectionId ?? connectionId ?? "",
+      snapshot.lineUuid,
+      snapshot.statusUuid,
+      observedAt,
+    );
   }
   return sent;
 }
 
 export async function dispatchLineNotificationEvents(events: PushEvent[]) {
-  const rules = (await listLineNotificationRules()).filter((rule) => rule.enabled);
-  if (rules.length === 0) return { checked: events.length, sent: 0 };
+  let rules: LineNotificationRule[] = [];
+  try {
+    rules = (await listLineNotificationRules()).filter((rule) => rule.enabled);
+  } catch (error) {
+    console.error("LINE notification rules load failed:", error);
+    return { checked: events.length, sent: 0, error: "RULES_LOAD_FAILED" };
+  }
+  if (rules.length === 0) {
+    console.log("LINE notification: no enabled rules configured");
+    return { checked: events.length, sent: 0 };
+  }
 
-  let sent = 0;
+  const targets = new Map<string, { connectionId: string; statusUuid: string | null; observedAt: string }>();
   for (const event of events) {
     if (!event.accepted || !event.lineUuid) continue;
-    let statusUuid = event.statusUuid;
-    // Some iXacs payloads omit andonStatusStyle; resolve live status so LINE still fires immediately.
-    if (!statusUuid && event.connectionId) {
-      try {
-        const connection = await getConnection(event.connectionId);
-        if (connection) {
-          const live = await getCtMonitorData(connectionAsTarget(connection), [event.lineUuid], { realTime: true });
-          if (live.ok) {
-            statusUuid = summarizeMonitorJson(live.responseJson).find((row) => row.uuid === event.lineUuid)?.statusUuid ?? null;
-          }
-        }
-      } catch (error) {
-        console.warn("LINE notification live-status fallback failed:", error);
-      }
-    }
-    sent += await observe(rules, event.connectionId ?? "", event.lineUuid, statusUuid, event.receivedAt);
+    const connectionId = event.connectionId || rules.find((rule) => rule.lineUuid === event.lineUuid)?.connectionId || "";
+    targets.set(`${connectionId}:${event.lineUuid}`, {
+      connectionId,
+      statusUuid: event.statusUuid,
+      observedAt: event.receivedAt,
+    });
+  }
+
+  let sent = 0;
+  for (const [key, target] of targets) {
+    const lineUuid = key.slice(key.indexOf(":") + 1);
+    // Always re-read live iXacs status: Push payloads often omit andonStatusStyle.
+    const statusUuid = await resolveLiveStatusUuid(target.connectionId, lineUuid, target.statusUuid);
+    console.log("LINE notification from Push", {
+      lineUuid,
+      connectionId: target.connectionId,
+      pushStatusUuid: target.statusUuid,
+      liveStatusUuid: statusUuid,
+    });
+    sent += await observe(rules, target.connectionId, lineUuid, statusUuid, target.observedAt);
   }
   return { checked: events.length, sent };
 }

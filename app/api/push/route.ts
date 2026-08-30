@@ -121,14 +121,16 @@ async function handle(request: NextRequest, method: string) {
     }
     const stored = await rememberPushBatch(body.parsed, session, request.headers.get("x-api-key"));
     if (stored.acceptedEvents.length > 0) {
-      const notificationResults = await Promise.allSettled([
-        dispatchPushNotifications(stored.acceptedEvents),
-        dispatchLineNotificationEvents(stored.acceptedEvents),
-      ]);
-      for (const result of notificationResults) {
-        if (result.status === "rejected") {
-          console.error("Notification dispatch failed:", result.reason);
-        }
+      try {
+        const lineResult = await dispatchLineNotificationEvents(stored.acceptedEvents);
+        console.log("LINE notification dispatch from Push:", lineResult);
+      } catch (error) {
+        console.error("LINE notification dispatch failed:", error);
+      }
+      try {
+        await dispatchPushNotifications(stored.acceptedEvents);
+      } catch (error) {
+        console.error("Slack notification dispatch failed:", error);
       }
     }
     const { acceptedEvents: _acceptedEvents, ...storedResult } = stored;

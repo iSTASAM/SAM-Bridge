@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { canAccessConnection, getRequestSession, sessionConnectionScope } from "@/lib/auth";
 import { getConnection, listConnections } from "@/lib/ixacs-connections";
 import {
@@ -8,6 +8,7 @@ import {
   type PushEvent,
 } from "@/lib/ixacs-store";
 import { applyLiveStatus, getLiveLineStatusesByConnection } from "@/lib/push-live-status";
+import { dispatchLineStatusSnapshots } from "@/lib/line-notification-runner";
 
 export const dynamic = "force-dynamic";
 
@@ -132,6 +133,21 @@ async function getConfiguredLineRows(input: {
     return true;
   });
   rows.sort((a, b) => (a.lineNameTh ?? a.lineName ?? "").localeCompare(b.lineNameTh ?? b.lineName ?? "", "th"));
+
+  // When this page polls live iXacs status, also drive LINE alerts for matching rules.
+  // Instant delivery still prefers Push → /api/push; this covers payloads that omit status.
+  after(() => {
+    void dispatchLineStatusSnapshots(
+      rows.map((row) => ({
+        lineUuid: row.lineUuid ?? "",
+        statusUuid: row.statusUuid,
+        connectionId: row.connectionId,
+      })),
+      new Date().toISOString(),
+    ).catch((error) => {
+      console.warn("LINE notification from push events live poll failed:", error);
+    });
+  });
 
   const lines = new Map<string, { uuid: string; name: string | null; nameTh: string | null; nameEn: string | null; nameJa: string | null }>();
   const statuses = new Map<string, { uuid: string; name: string | null; nameTh: string | null; nameEn: string | null; nameJa: string | null; bgColor: string | null }>();
