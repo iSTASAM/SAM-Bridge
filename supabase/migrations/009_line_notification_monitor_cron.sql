@@ -1,8 +1,8 @@
--- Fallback monitor for Vercel Hobby deployments.
--- iXacs Push remains the real-time path; this job reconciles missed transitions every minute.
+-- Optional fallback monitor when iXacs Push is missed.
+-- Instant LINE alerts come from POST /api/push — do not use Vercel Cron.
 -- Before the job can call SAM Bridge, create these two Vault secrets:
 --   sam_bridge_monitor_url   = https://your-domain/api/notifications/monitor
---   sam_bridge_cron_secret   = the same value as Vercel CRON_SECRET
+--   sam_bridge_cron_secret   = the same value as CRON_SECRET
 
 create extension if not exists pg_cron;
 create extension if not exists pg_net with schema extensions;

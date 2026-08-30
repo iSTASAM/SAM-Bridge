@@ -191,10 +191,27 @@ export async function dispatchLineStatusSnapshots(
 
 export async function dispatchLineNotificationEvents(events: PushEvent[]) {
   const rules = (await listLineNotificationRules()).filter((rule) => rule.enabled);
+  if (rules.length === 0) return { checked: events.length, sent: 0 };
+
   let sent = 0;
   for (const event of events) {
     if (!event.accepted || !event.lineUuid) continue;
-    sent += await observe(rules, event.connectionId ?? "", event.lineUuid, event.statusUuid, event.receivedAt);
+    let statusUuid = event.statusUuid;
+    // Some iXacs payloads omit andonStatusStyle; resolve live status so LINE still fires immediately.
+    if (!statusUuid && event.connectionId) {
+      try {
+        const connection = await getConnection(event.connectionId);
+        if (connection) {
+          const live = await getCtMonitorData(connectionAsTarget(connection), [event.lineUuid], { realTime: true });
+          if (live.ok) {
+            statusUuid = summarizeMonitorJson(live.responseJson).find((row) => row.uuid === event.lineUuid)?.statusUuid ?? null;
+          }
+        }
+      } catch (error) {
+        console.warn("LINE notification live-status fallback failed:", error);
+      }
+    }
+    sent += await observe(rules, event.connectionId ?? "", event.lineUuid, statusUuid, event.receivedAt);
   }
   return { checked: events.length, sent };
 }

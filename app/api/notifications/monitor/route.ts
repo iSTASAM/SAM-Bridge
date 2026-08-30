@@ -34,7 +34,7 @@ function cronAuthorized(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  // Vercel Cron and Supabase pg_cron both call this with Bearer CRON_SECRET.
+  // Optional Supabase pg_cron (or manual) caller. Not used by Vercel Cron.
   if (!cronAuthorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }

@@ -1,28 +1,23 @@
-# LINE notification monitor
+# LINE notifications (no Vercel Cron)
 
-Notifications should fire **immediately** when iXacs Push reaches `/api/push`.
-The monitor is only a fallback for missed Push events.
+LINE alerts are designed to send **immediately** from the iXacs Push webhook.
+Do **not** configure Vercel Cron for this app (Hobby plans reject frequent crons and block deploy).
 
-## Immediate path (preferred)
+## Immediate path (required)
 
-1. Create a Push API key in `/settings/push` for each production line.
-2. Point iXacs Push to `https://your-domain/api/push` with that key.
-3. Keep Messaging API channel access token set in `/settings/notifications/line-webhook`.
-4. In alert settings, set **hold duration = 0** (ทันที / Immediate).
+1. Create a Push API key in `/settings/push` for each production line that should alert.
+2. In iXacs, point Push to `https://your-domain/api/push` and use that key (`x-api-key`).
+3. Set the Messaging API channel access token in `/settings/notifications/line-webhook`.
+4. In alert settings, keep hold duration at **0** (ทันที / Immediate).
 
-## Fallback monitor (every minute)
+When iXacs changes status, it POSTs to `/api/push` → SAM Bridge sends the LINE card right away.
 
-### Vercel Cron
+## Optional fallback (Supabase only)
 
-`vercel.json` schedules `GET /api/notifications/monitor` every minute.
+If you want a safety net when a Push event is missed, use Supabase `pg_cron` (not Vercel):
 
-1. Set `CRON_SECRET` in Vercel (and local `.env`) to a random value of at least 32 characters.
-2. Vercel sends `Authorization: Bearer <CRON_SECRET>` automatically.
-3. On **Hobby**, Vercel may still limit cron frequency — use Supabase Cron below for reliable 1-minute checks.
-
-### Supabase Cron
-
-1. Create Vault secrets:
+1. Set `CRON_SECRET` in the app environment.
+2. Create Vault secrets:
 
 ```sql
 select vault.create_secret(
@@ -31,12 +26,12 @@ select vault.create_secret(
 );
 
 select vault.create_secret(
-  'the-same-value-as-vercel-CRON_SECRET',
+  'the-same-value-as-CRON_SECRET',
   'sam_bridge_cron_secret'
 );
 ```
 
-2. Apply migration `009_line_notification_monitor_cron.sql`.
-3. Check **Integrations → Cron → Jobs** for `sam-bridge-line-monitor` (`* * * * *`).
+3. Apply migration `009_line_notification_monitor_cron.sql`.
+4. Apply `015_line_notification_immediate_duration.sql` so existing rules use duration `0`.
 
-Also apply `015_line_notification_immediate_duration.sql` so existing rules use duration `0` (send immediately).
+This fallback is optional. Instant alerts depend on Push, not on cron.
