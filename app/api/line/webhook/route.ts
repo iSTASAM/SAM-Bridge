@@ -21,6 +21,7 @@ import {
 } from "@/lib/line-messaging";
 import { markLineFriendship } from "@/lib/line-users";
 import { ProductionAiError, runProductionAiChat } from "@/lib/production-ai-chat";
+import { buildLineAiMessages } from "@/lib/line-ai-messages";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,8 +36,6 @@ type LineEvent = {
 };
 
 const MAX_QUESTION_LENGTH = 2_000;
-const LINE_TEXT_LIMIT = 4_500;
-const LINE_MESSAGE_LIMIT = 5;
 
 function normalizeSecret(value: string) {
   return value.trim().replace(/^["']|["']$/g, "");
@@ -83,30 +82,6 @@ async function replyText(replyToken: string | undefined, text: string) {
   await replyLineMessages(replyToken, [textMessage(text)]);
 }
 
-function lineAnswerMessages(answer: string) {
-  const suffix = "\n\n(คำตอบถูกตัดให้เหมาะกับข้อจำกัดของ LINE)";
-  const maxTotal = LINE_TEXT_LIMIT * LINE_MESSAGE_LIMIT - suffix.length;
-  const normalized = answer.trim();
-  const text = normalized.length > maxTotal ? `${normalized.slice(0, maxTotal)}${suffix}` : normalized;
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining && chunks.length < LINE_MESSAGE_LIMIT) {
-    if (remaining.length <= LINE_TEXT_LIMIT) {
-      chunks.push(remaining);
-      break;
-    }
-    const candidate = remaining.slice(0, LINE_TEXT_LIMIT);
-    const newline = candidate.lastIndexOf("\n");
-    const space = candidate.lastIndexOf(" ");
-    const splitAt = Math.max(newline, space) >= LINE_TEXT_LIMIT * 0.6
-      ? Math.max(newline, space)
-      : LINE_TEXT_LIMIT;
-    chunks.push(remaining.slice(0, splitAt).trim());
-    remaining = remaining.slice(splitAt).trim();
-  }
-  return chunks.filter(Boolean).map(textMessage);
-}
-
 function loginMessage(liffId: string) {
   return {
     type: "template",
@@ -139,7 +114,7 @@ async function processAiMessage(input: {
       history,
     });
     await appendLineAiHistory(input.lineUserId, "assistant", result.answer);
-    const sent = await pushLineMessages(input.lineUserId, lineAnswerMessages(result.answer));
+    const sent = await pushLineMessages(input.lineUserId, buildLineAiMessages(result));
     await finishLineAiEvent(input.eventId, sent.ok ? "completed" : "failed");
   } catch (error) {
     console.error("LINE AI request failed:", error instanceof Error ? error.message : "unknown error");
