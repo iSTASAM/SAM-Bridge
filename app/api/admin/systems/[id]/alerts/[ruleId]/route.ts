@@ -6,6 +6,7 @@ import {
   getLineNotificationRule,
   updateLineNotificationRule,
 } from "@/lib/line-notification-rules";
+import { dispatchLineCurrentStatus } from "@/lib/line-notification-runner";
 import { resolveLineNotificationTarget } from "@/lib/line-notification-target";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +45,10 @@ export async function PATCH(
       ...target,
     });
     if (!rule) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ ok: true, rule });
+    const notification = rule.enabled
+      ? await dispatchLineCurrentStatus(id, rule.lineUuid)
+      : { statusUuid: null, sent: 0 };
+    return NextResponse.json({ ok: true, rule, notification });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "SAVE_FAILED" },

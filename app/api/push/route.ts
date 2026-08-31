@@ -120,11 +120,14 @@ async function handle(request: NextRequest, method: string) {
       console.log("Captured SESSION from iXacs push:", `${session.slice(0, 8)}...`);
     }
     const stored = await rememberPushBatch(body.parsed, session, request.headers.get("x-api-key"));
+    let lineDispatchFailed = false;
     if (stored.acceptedEvents.length > 0) {
       try {
         const lineResult = await dispatchLineNotificationEvents(stored.acceptedEvents);
         console.log("LINE notification dispatch from Push:", lineResult);
+        lineDispatchFailed = Boolean(lineResult.error);
       } catch (error) {
+        lineDispatchFailed = true;
         console.error("LINE notification dispatch failed:", error);
       }
       try {
@@ -135,6 +138,19 @@ async function handle(request: NextRequest, method: string) {
     }
     const { acceptedEvents: _acceptedEvents, ...storedResult } = stored;
     void _acceptedEvents;
+    if (lineDispatchFailed) {
+      return json(
+        {
+          ...storedResult,
+          ok: false,
+          received: true,
+          retryable: true,
+          error: "LINE_NOTIFICATION_DISPATCH_FAILED",
+          receivedAt: new Date().toISOString(),
+        },
+        503,
+      );
+    }
     if (stored.accepted === 0) {
       const errors = "errors" in stored ? stored.errors : undefined;
       const forbidden = Boolean(

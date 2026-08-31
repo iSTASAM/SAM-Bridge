@@ -65,6 +65,32 @@ export type NewLineNotificationRule = Pick<
 
 const FILE = path.join(process.cwd(), "data", "line-notification-rules.json");
 
+type SupabaseOperationResult = {
+  error: { message: string } | null;
+};
+
+function retryableSupabaseError(message: string) {
+  return /jwt issued at future|fetch failed|network|timeout|econnreset|\b50[234]\b/i.test(message);
+}
+
+async function withSupabaseRetry<T extends SupabaseOperationResult>(
+  operation: () => PromiseLike<T>,
+  label: string,
+) {
+  const delays = [250, 750];
+  let result = await operation();
+  for (let attempt = 0; result.error && retryableSupabaseError(result.error.message) && attempt < delays.length; attempt += 1) {
+    console.warn("LINE notification Supabase operation retry", {
+      label,
+      attempt: attempt + 2,
+      error: result.error.message,
+    });
+    await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+    result = await operation();
+  }
+  return result;
+}
+
 function rowToRule(row: RuleRow): LineNotificationRule {
   return {
     id: row.id,
@@ -131,9 +157,14 @@ export async function listLineNotificationRules(lineUserId?: string) {
   if (supabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      let query = supabase.from("line_notification_rules").select("*").order("updated_at", { ascending: false });
-      if (lineUserId) query = query.eq("line_user_id", lineUserId);
-      const { data, error } = await query;
+      const { data, error } = await withSupabaseRetry(
+        () => {
+          let retryQuery = supabase.from("line_notification_rules").select("*").order("updated_at", { ascending: false });
+          if (lineUserId) retryQuery = retryQuery.eq("line_user_id", lineUserId);
+          return retryQuery;
+        },
+        "list-rules",
+      );
       if (error) throw new Error(`LINE_NOTIFICATION_RULES_LOAD_FAILED: ${error.message}`);
       return ((data ?? []) as RuleRow[]).map(rowToRule);
     }
@@ -169,32 +200,43 @@ export async function createLineNotificationRule(input: NewLineNotificationRule)
     const supabase = getSupabaseAdmin();
     if (supabase) {
       const row = ruleToRow(rule);
-      let { data, error } = await supabase
-        .from("line_notification_rules")
-        .upsert(row, { onConflict: "line_user_id,line_uuid,status_uuid" })
-        .select("*")
-        .single();
-      if (error && /status_text_color/i.test(error.message)) {
-        const { status_text_color: _ignored, ...rest } = row;
-        ({ data, error } = await supabase
+      let { data, error } = await withSupabaseRetry(
+        () => supabase
           .from("line_notification_rules")
-          .upsert(rest, { onConflict: "line_user_id,line_uuid,status_uuid" })
+          .upsert(row, { onConflict: "line_user_id,line_uuid,status_uuid" })
           .select("*")
-          .single());
+          .single(),
+        "create-rule",
+      );
+      if (error && /status_text_color/i.test(error.message)) {
+        const rest = { ...row };
+        delete rest.status_text_color;
+        ({ data, error } = await withSupabaseRetry(
+          () => supabase
+            .from("line_notification_rules")
+            .upsert(rest, { onConflict: "line_user_id,line_uuid,status_uuid" })
+            .select("*")
+            .single(),
+          "create-rule-legacy-schema",
+        ));
       }
       if (error) throw new Error(`LINE_NOTIFICATION_RULE_CREATE_FAILED: ${error.message}`);
       // Force-clear notification latch even if upsert ignored nulls.
       const saved = rowToRule(data as RuleRow);
       if (saved.lastNotifiedAt || saved.observedStatusUuid) {
-        await supabase
-          .from("line_notification_rules")
-          .update({
-            observed_status_uuid: null,
-            status_started_at: null,
-            last_notified_at: null,
-            updated_at: now,
-          })
-          .eq("id", saved.id);
+        const cleared = await withSupabaseRetry(
+          () => supabase
+            .from("line_notification_rules")
+            .update({
+              observed_status_uuid: null,
+              status_started_at: null,
+              last_notified_at: null,
+              updated_at: now,
+            })
+            .eq("id", saved.id),
+          "clear-rule-state-after-create",
+        );
+        if (cleared.error) throw new Error(`LINE_NOTIFICATION_RULE_CREATE_FAILED: ${cleared.error.message}`);
         return { ...saved, observedStatusUuid: null, statusStartedAt: null, lastNotifiedAt: null, updatedAt: now };
       }
       return saved;
@@ -277,22 +319,28 @@ export async function updateLineNotificationRule(
         last_notified_at: next.lastNotifiedAt,
         updated_at: next.updatedAt,
       };
-      let { data, error } = await supabase
-        .from("line_notification_rules")
-        .update(patch)
-        .eq("id", id)
-        .eq("line_user_id", lineUserId)
-        .select("*")
-        .maybeSingle();
-      if (error && /status_text_color/i.test(error.message)) {
-        delete patch.status_text_color;
-        ({ data, error } = await supabase
+      let { data, error } = await withSupabaseRetry(
+        () => supabase
           .from("line_notification_rules")
           .update(patch)
           .eq("id", id)
           .eq("line_user_id", lineUserId)
           .select("*")
-          .maybeSingle());
+          .maybeSingle(),
+        "update-rule",
+      );
+      if (error && /status_text_color/i.test(error.message)) {
+        delete patch.status_text_color;
+        ({ data, error } = await withSupabaseRetry(
+          () => supabase
+            .from("line_notification_rules")
+            .update(patch)
+            .eq("id", id)
+            .eq("line_user_id", lineUserId)
+            .select("*")
+            .maybeSingle(),
+          "update-rule-legacy-schema",
+        ));
       }
       if (error) throw new Error(`LINE_NOTIFICATION_RULE_UPDATE_FAILED: ${error.message}`);
       return data ? rowToRule(data as RuleRow) : null;
@@ -317,11 +365,14 @@ export async function deleteLineNotificationRule(id: string, lineUserId: string)
   if (supabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      const { error, count } = await supabase
-        .from("line_notification_rules")
-        .delete({ count: "exact" })
-        .eq("id", id)
-        .eq("line_user_id", lineUserId);
+      const { error, count } = await withSupabaseRetry(
+        () => supabase
+          .from("line_notification_rules")
+          .delete({ count: "exact" })
+          .eq("id", id)
+          .eq("line_user_id", lineUserId),
+        "delete-rule",
+      );
       if (error) throw new Error(`LINE_NOTIFICATION_RULE_DELETE_FAILED: ${error.message}`);
       return Boolean(count);
     }
@@ -345,15 +396,18 @@ export async function rememberLineNotificationObservation(
   if (supabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      const { error } = await supabase
-        .from("line_notification_rules")
-        .update({
-          observed_status_uuid: statusUuid,
-          status_started_at: nextStartedAt,
-          last_notified_at: nextNotifiedAt,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", rule.id);
+      const { error } = await withSupabaseRetry(
+        () => supabase
+          .from("line_notification_rules")
+          .update({
+            observed_status_uuid: statusUuid,
+            status_started_at: nextStartedAt,
+            last_notified_at: nextNotifiedAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", rule.id),
+        "remember-observation",
+      );
       if (error) throw new Error(`LINE_NOTIFICATION_STATE_UPDATE_FAILED: ${error.message}`);
     }
   } else {
@@ -376,10 +430,13 @@ export async function markLineNotificationSent(ruleId: string, sentAt: string) {
   if (supabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      const { error } = await supabase
-        .from("line_notification_rules")
-        .update({ last_notified_at: sentAt, updated_at: sentAt })
-        .eq("id", ruleId);
+      const { error } = await withSupabaseRetry(
+        () => supabase
+          .from("line_notification_rules")
+          .update({ last_notified_at: sentAt, updated_at: sentAt })
+          .eq("id", ruleId),
+        "mark-sent",
+      );
       if (error) throw new Error(`LINE_NOTIFICATION_SENT_UPDATE_FAILED: ${error.message}`);
       return;
     }

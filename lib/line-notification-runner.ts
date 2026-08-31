@@ -142,14 +142,23 @@ async function resolveLiveStatusUuid(connectionId: string, lineUuid: string, fal
   }
 }
 
+export async function dispatchLineCurrentStatus(connectionId: string, lineUuid: string) {
+  const statusUuid = await resolveLiveStatusUuid(connectionId, lineUuid, null);
+  if (!statusUuid) return { statusUuid: null, sent: 0 };
+  const sent = await dispatchLineStatusChange(lineUuid, statusUuid, new Date().toISOString(), connectionId);
+  return { statusUuid, sent };
+}
+
 async function observe(
   rules: LineNotificationRule[],
   connectionId: string,
   lineUuid: string,
   statusUuid: string | null,
   observedAt: string,
+  strictDelivery = false,
 ) {
   let sent = 0;
+  const deliveryErrors: string[] = [];
   const matching = rulesForLine(rules, lineUuid, connectionId);
   if (!matching.length) {
     console.log("LINE notification skip: no enabled Messaging-API rules for line", { lineUuid, connectionId });
@@ -207,13 +216,18 @@ async function observe(
         statusUuid,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "LINE_SEND_FAILED";
       console.warn("LINE notification send failed:", {
         ruleId: rule.id,
         lineUuid: rule.lineUuid,
         lineUserId: rule.lineUserId,
-        error: error instanceof Error ? error.message : error,
+        error: message,
       });
+      deliveryErrors.push(`${rule.id}: ${message}`);
     }
+  }
+  if (strictDelivery && deliveryErrors.length > 0) {
+    throw new Error(`LINE_NOTIFICATION_DELIVERY_FAILED: ${deliveryErrors.join("; ")}`);
   }
   return sent;
 }
@@ -285,7 +299,7 @@ export async function dispatchLineNotificationEvents(events: PushEvent[]) {
       pushStatusUuid: target.statusUuid,
       liveStatusUuid: statusUuid,
     });
-    sent += await observe(rules, target.connectionId, lineUuid, statusUuid, target.observedAt);
+    sent += await observe(rules, target.connectionId, lineUuid, statusUuid, target.observedAt, true);
   }
   return { checked: events.length, sent };
 }

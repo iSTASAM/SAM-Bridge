@@ -270,17 +270,26 @@ async function hydrate() {
 }
 
 function persist() {
-  mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-  const payload: PersistedState = {
-    groups: Object.fromEntries(groups),
-    lines: Object.fromEntries(lines),
-    statusesByLine: Object.fromEntries(
-      [...statusesByLine.entries()].map(([id, map]) => [id, Object.fromEntries(map)]),
-    ),
-    historyByLine: Object.fromEntries(historyByLine),
-    pushEvents,
-  };
-  writeFileSync(STATE_FILE, JSON.stringify(payload, null, 2), "utf8");
+  try {
+    mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+    const payload: PersistedState = {
+      groups: Object.fromEntries(groups),
+      lines: Object.fromEntries(lines),
+      statusesByLine: Object.fromEntries(
+        [...statusesByLine.entries()].map(([id, map]) => [id, Object.fromEntries(map)]),
+      ),
+      historyByLine: Object.fromEntries(historyByLine),
+      pushEvents,
+    };
+    writeFileSync(STATE_FILE, JSON.stringify(payload, null, 2), "utf8");
+  } catch (error) {
+    // Vercel functions have no durable writable project filesystem. Push
+    // processing and LINE delivery must continue; durable configuration and
+    // notification state are stored in Supabase separately.
+    console.warn("iXacs local state persistence unavailable; continuing in memory", {
+      code: error && typeof error === "object" && "code" in error ? error.code : undefined,
+    });
+  }
 }
 
 export function extractSession(cookieHeader: string | null, parsed: unknown): string | null {
