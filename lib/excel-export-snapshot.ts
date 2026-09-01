@@ -16,8 +16,13 @@ type SnapshotGlobals = typeof globalThis & {
 const shared = globalThis as SnapshotGlobals;
 const memoryCache = shared.__excelExportSnapshotMemory ??= new Map();
 
-function cacheKey(exportId: string, dateFrom: string, dateTo: string) {
-  return `${exportId}:${dateFrom}:${dateTo}`;
+function normalizeIsoDate(value: unknown) {
+  if (typeof value !== "string" || !value) return "";
+  return value.slice(0, 10);
+}
+
+function cacheKey(exportId: string, dateFrom: string, dateTo: string, historyDays: number) {
+  return `${exportId}:${dateFrom}:${dateTo}:${historyDays}`;
 }
 
 export function excelSnapshotTtlMs(includesToday: boolean) {
@@ -29,10 +34,11 @@ export async function readExcelExportSnapshot(
   exportId: string,
   dateFrom: string,
   dateTo: string,
+  historyDays: number,
   includesToday: boolean,
 ): Promise<ExcelExportSnapshotPayload | null> {
   const ttlMs = excelSnapshotTtlMs(includesToday);
-  const key = cacheKey(exportId, dateFrom, dateTo);
+  const key = cacheKey(exportId, dateFrom, dateTo, historyDays);
   const cached = memoryCache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.payload;
 
@@ -42,11 +48,12 @@ export async function readExcelExportSnapshot(
 
   const { data, error } = await supabase
     .from("excel_export_snapshots")
-    .select("date_from, date_to, payload, updated_at")
+    .select("date_from, date_to, history_days, payload, updated_at")
     .eq("export_id", exportId)
     .maybeSingle();
   if (error || !data) return null;
-  if (data.date_from !== dateFrom || data.date_to !== dateTo) return null;
+  if (normalizeIsoDate(data.date_from) !== dateFrom || normalizeIsoDate(data.date_to) !== dateTo) return null;
+  if (Number(data.history_days) !== historyDays) return null;
 
   const updatedAt = Date.parse(String(data.updated_at));
   if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > ttlMs) return null;
@@ -62,11 +69,12 @@ export async function writeExcelExportSnapshot(
   exportId: string,
   dateFrom: string,
   dateTo: string,
+  historyDays: number,
   includesToday: boolean,
   payload: ExcelExportSnapshotPayload,
 ) {
   const ttlMs = excelSnapshotTtlMs(includesToday);
-  const key = cacheKey(exportId, dateFrom, dateTo);
+  const key = cacheKey(exportId, dateFrom, dateTo, historyDays);
   memoryCache.set(key, { expiresAt: Date.now() + ttlMs, payload });
 
   if (!supabaseConfigured()) return;
@@ -77,6 +85,7 @@ export async function writeExcelExportSnapshot(
     export_id: exportId,
     date_from: dateFrom,
     date_to: dateTo,
+    history_days: historyDays,
     payload,
     updated_at: new Date().toISOString(),
   });

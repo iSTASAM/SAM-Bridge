@@ -51,6 +51,8 @@ if (exportShared.__ixacsLostTimeWarmVersion !== 2) {
   exportShared.__ixacsLostTimeWarmVersion = 2;
 }
 const EXCEL_HISTORY_CONCURRENCY = 12;
+const EXCEL_LOST_TIME_CONCURRENCY = 4;
+const EXCEL_PRODUCTION_FIELD_COUNT = 13;
 const EXCEL_DAILY_CACHE_FILE = path.join(process.cwd(), "data", "ixacs-excel-production-cache.json");
 
 function hydrateExcelDailyCache() {
@@ -389,6 +391,49 @@ async function cachedLostTimeForDates(connectionId: string, from: string, to: st
   return { values, missingDates: [...missingDates] };
 }
 
+function excelRowHasLostTimeTopics(row: Record<string, unknown>) {
+  return Object.keys(row).length > EXCEL_PRODUCTION_FIELD_COUNT;
+}
+
+function excelPayloadHasLostTimeTopics(payload: ExcelExportSnapshotPayload) {
+  return payload.value.some((row) => excelRowHasLostTimeTopics(row));
+}
+
+async function awaitExcelLostTimeForDates(
+  requestUrl: string,
+  connectionId: string,
+  from: string,
+  to: string,
+  bodies: ProductionBody[],
+) {
+  const cached = await cachedLostTimeForDates(connectionId, from, to, bodies);
+  const values = cached.values;
+  const warnings: Array<{ from: string; to: string; error: string }> = [];
+  if (cached.missingDates.length === 0) return { values, warnings };
+
+  const today = bangkokToday();
+  const missing = [...cached.missingDates].sort((left, right) => {
+    if (left === today) return -1;
+    if (right === today) return 1;
+    return left.localeCompare(right);
+  });
+  const fetched = await mapWithConcurrency(missing, EXCEL_LOST_TIME_CONCURRENCY, async (date) => {
+    const result = await lostTimeForDay(requestUrl, connectionId, date);
+    return { date, ...result };
+  });
+  const failedDates: string[] = [];
+  for (const result of fetched) {
+    warnings.push(...result.warnings);
+    if (result.warnings.length > 0 && result.values.size === 0) {
+      failedDates.push(result.date);
+      continue;
+    }
+    for (const [lineUuid, columns] of result.values) values.set(`${result.date}:${lineUuid}`, columns);
+  }
+  if (failedDates.length > 0) enqueueLostTimeWarm(requestUrl, connectionId, failedDates);
+  return { values, warnings };
+}
+
 function enqueueLostTimeWarm(requestUrl: string, connectionId: string, dates: string[]) {
   const pending = lostTimeWarmPending.get(connectionId) ?? new Set<string>();
   dates.forEach((date) => pending.add(date));
@@ -413,7 +458,7 @@ function enqueueLostTimeWarm(requestUrl: string, connectionId: string, dates: st
       lostTimeWarmRunning.delete(connectionId);
       if (pending.size === 0) lostTimeWarmPending.delete(connectionId);
     }
-  })(), 60_000);
+  })(), 0);
   lostTimeWarmTimers.set(connectionId, timer);
 }
 
@@ -455,7 +500,14 @@ export async function serveTabularExport(request: Request, id: string, destinati
       ...(settings.includeLineDimension ? ["production-lines"] : []),
       ...(settings.includeDateDimension ? ["dates"] : []),
     ];
-    return NextResponse.json({ exportId: id, exportName: config.name, tables, defaultDateFrom: range.from, defaultDateTo: range.to });
+    return NextResponse.json({
+      exportId: id,
+      exportName: config.name,
+      tables,
+      defaultDateFrom: range.from,
+      defaultDateTo: range.to,
+      historyDays: settings.historyDays,
+    });
   }
 
   if (table === "dates" && settings.includeDateDimension) {
@@ -477,10 +529,30 @@ export async function serveTabularExport(request: Request, id: string, destinati
     const includesToday = range.from <= today && range.to >= today;
 
     if (excelProduction && destination === "excel" && table === "production" && excelBulkHistory && !excelFresh) {
-      const snapshot = await readExcelExportSnapshot(id, range.from, range.to, includesToday);
-      if (snapshot) {
+      const snapshot = await readExcelExportSnapshot(
+        id,
+        range.from,
+        range.to,
+        settings.historyDays,
+        includesToday,
+      );
+      if (snapshot && excelPayloadHasLostTimeTopics(snapshot)) {
         return NextResponse.json(snapshot, { headers: { "x-sam-bridge-cache": "snapshot" } });
       }
+    }
+
+    const requestedHistoryDays = Number(url.searchParams.get("days"));
+    if (
+      excelBulkHistory &&
+      Number.isFinite(requestedHistoryDays) &&
+      requestedHistoryDays !== settings.historyDays
+    ) {
+      return NextResponse.json({
+        error: "EXCEL_HISTORY_DAYS_MISMATCH",
+        configuredHistoryDays: settings.historyDays,
+        defaultDateFrom: range.from,
+        defaultDateTo: range.to,
+      }, { status: 409 });
     }
 
     if (excelProduction || (destination === "power-bi" && ((table === "production" && settings.datasets.includes("production")) || (table === "production-lines" && settings.includeLineDimension)))) {
@@ -491,9 +563,15 @@ export async function serveTabularExport(request: Request, id: string, destinati
         ? await priorityLostTimeForDates(request.url, config.sourceConnectionId, range.from, range.to)
         : { values: new Map<string, Row>(), warnings: [] as Array<{ from: string; to: string; error: string }> };
       if (destination === "excel" && table === "production") {
-        const cached = await cachedLostTimeForDates(config.sourceConnectionId, range.from, range.to, result.bodies);
-        lostTime.values = cached.values;
-        enqueueLostTimeWarm(request.url, config.sourceConnectionId, cached.missingDates);
+        const loaded = await awaitExcelLostTimeForDates(
+          request.url,
+          config.sourceConnectionId,
+          range.from,
+          range.to,
+          result.bodies,
+        );
+        lostTime.values = loaded.values;
+        lostTime.warnings.push(...loaded.warnings);
       }
       result.warnings.push(...lostTime.warnings);
       const bodies = result.bodies;
@@ -533,11 +611,12 @@ export async function serveTabularExport(request: Request, id: string, destinati
         warnings: result.warnings,
         value,
       };
-      if (destination === "excel" && table === "production" && excelBulkHistory) {
+      if (destination === "excel" && table === "production" && excelBulkHistory && excelPayloadHasLostTimeTopics(responseBody as ExcelExportSnapshotPayload)) {
         void writeExcelExportSnapshot(
           id,
           range.from,
           range.to,
+          settings.historyDays,
           includesToday,
           responseBody as ExcelExportSnapshotPayload,
         );

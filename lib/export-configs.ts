@@ -478,6 +478,7 @@ async function persistConfig(config: ExportConfig) {
     if (coerced.destinationType === "excel") await deleteExcelExportSnapshot(coerced.id);
     return;
   }
+  if (config.destinationType === "excel") await deleteExcelExportSnapshot(config.id);
   persistFile();
 }
 
