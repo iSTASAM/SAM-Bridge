@@ -16,6 +16,11 @@ import {
 } from "@/lib/ixacs-client";
 import { getConnection } from "@/lib/ixacs-connections";
 import { acquireIxacsConnectionLock } from "@/lib/ixacs-request-lock";
+import {
+  readExcelExportSnapshot,
+  writeExcelExportSnapshot,
+  type ExcelExportSnapshotPayload,
+} from "@/lib/excel-export-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +50,7 @@ if (exportShared.__ixacsLostTimeWarmVersion !== 2) {
   lostTimeWarmRunning.clear();
   exportShared.__ixacsLostTimeWarmVersion = 2;
 }
-const EXCEL_HISTORY_CONCURRENCY = 8;
+const EXCEL_HISTORY_CONCURRENCY = 12;
 const EXCEL_DAILY_CACHE_FILE = path.join(process.cwd(), "data", "ixacs-excel-production-cache.json");
 
 function hydrateExcelDailyCache() {
@@ -467,6 +472,17 @@ export async function serveTabularExport(request: Request, id: string, destinati
       (table === "production" && config.excelSettings.tables.includes("history")) ||
       (table === "current" && config.excelSettings.tables.includes("current"))
     );
+    const excelFresh = url.searchParams.get("fresh") === "1";
+    const today = bangkokToday();
+    const includesToday = range.from <= today && range.to >= today;
+
+    if (excelProduction && destination === "excel" && table === "production" && excelBulkHistory && !excelFresh) {
+      const snapshot = await readExcelExportSnapshot(id, range.from, range.to, includesToday);
+      if (snapshot) {
+        return NextResponse.json(snapshot, { headers: { "x-sam-bridge-cache": "snapshot" } });
+      }
+    }
+
     if (excelProduction || (destination === "power-bi" && ((table === "production" && settings.datasets.includes("production")) || (table === "production-lines" && settings.includeLineDimension)))) {
       const result = destination === "excel" && table === "production"
         ? await productionDailyWindowsFast(config.sourceConnectionId, range.from, range.to)
@@ -477,18 +493,7 @@ export async function serveTabularExport(request: Request, id: string, destinati
       if (destination === "excel" && table === "production") {
         const cached = await cachedLostTimeForDates(config.sourceConnectionId, range.from, range.to, result.bodies);
         lostTime.values = cached.values;
-        const today = bangkokToday();
-        if (!excelBulkHistory && range.from <= today && range.to >= today) {
-          lostTimeWarmPending.get(config.sourceConnectionId)?.delete(today);
-          const live = await priorityLostTimeForDates(request.url, config.sourceConnectionId, today, today);
-          for (const [key, columns] of live.values) lostTime.values.set(key, columns);
-          lostTime.warnings.push(...live.warnings);
-        }
-        enqueueLostTimeWarm(
-          request.url,
-          config.sourceConnectionId,
-          excelBulkHistory ? cached.missingDates : cached.missingDates.filter((date) => date !== today),
-        );
+        enqueueLostTimeWarm(request.url, config.sourceConnectionId, cached.missingDates);
       }
       result.warnings.push(...lostTime.warnings);
       const bodies = result.bodies;
@@ -520,8 +525,25 @@ export async function serveTabularExport(request: Request, id: string, destinati
         ...emptyLostTimeColumns,
         ...(lostTime.values.get(`${String(body.dateFrom ?? range.from)}:${String(row.uuid ?? row.productionLineUuid ?? "")}`) ?? { "Lost Time รวม": null }),
       } : flat({ ...row, businessDate: body.dateFrom ?? range.from })));
+      const responseBody = {
+        table: destination === "excel" ? table === "current" ? "tblSAMCurrent" : "tblSAMProduction" : "FactProduction",
+        dateFrom: range.from,
+        dateTo: range.to,
+        partial: result.warnings.length > 0,
+        warnings: result.warnings,
+        value,
+      };
+      if (destination === "excel" && table === "production" && excelBulkHistory) {
+        void writeExcelExportSnapshot(
+          id,
+          range.from,
+          range.to,
+          includesToday,
+          responseBody as ExcelExportSnapshotPayload,
+        );
+      }
       return NextResponse.json(
-        { table: destination === "excel" ? table === "current" ? "tblSAMCurrent" : "tblSAMProduction" : "FactProduction", dateFrom: range.from, dateTo: range.to, partial: result.warnings.length > 0, warnings: result.warnings, value },
+        responseBody,
         excelCurrent ? { headers: { "cache-control": "no-store, no-cache, max-age=0, must-revalidate", pragma: "no-cache", expires: "0" } } : undefined,
       );
     }

@@ -16,6 +16,7 @@ import {
   type PublicSapConnection,
 } from "@/lib/sap-connections";
 import { getSupabaseAdmin, supabaseConfigured } from "@/lib/supabase-admin";
+import { deleteExcelExportSnapshot } from "@/lib/excel-export-snapshot";
 
 export const DESTINATION_TYPES = [
   "rest",
@@ -474,6 +475,7 @@ async function persistConfig(config: ExportConfig) {
     drafts.set(config.id, coerced);
     const { error } = await supabase.from("export_configs").upsert(configToRow(coerced, validConnectionIds));
     if (error) throw new Error(`EXPORTS_SAVE_FAILED: ${error.message}`);
+    if (coerced.destinationType === "excel") await deleteExcelExportSnapshot(coerced.id);
     return;
   }
   persistFile();
@@ -489,6 +491,7 @@ async function removeConfig(id: string) {
     const { error } = await supabase.from("export_configs").delete().eq("id", id);
     if (error) throw new Error(`EXPORTS_DELETE_FAILED: ${error.message}`);
     purgeLocalExportConfig(id);
+    await deleteExcelExportSnapshot(id);
   } else {
     if (!current) return false;
     persistFile();

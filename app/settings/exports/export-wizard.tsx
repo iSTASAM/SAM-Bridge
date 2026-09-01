@@ -84,7 +84,7 @@ const EXCEL_COPY = {
     methodValue: ".xlsx · Power Query",
     credentials: "การยืนยันตัวตน",
     credentialsValue: "Bearer API key ของ Export นี้",
-    refreshHint: "ตั้งรอบ Refresh ใน Excel ได้เอง เช่น Data → Queries & Connections หรือ Refresh All",
+    refreshHint: "ตั้ง Refresh ใน Excel อย่างน้อย 5 นาที (Query Properties) — ครั้งแรกอาจช้า แต่รอบถัดไปจะเร็วจาก cache",
     refreshSummary: "กำหนดใน Excel",
     chooseDataset: "เลือกตาราง Excel อย่างน้อย 1 ตาราง",
     save: "บันทึกและเปิดใช้งาน Excel",
@@ -112,7 +112,7 @@ const EXCEL_COPY = {
     methodValue: ".xlsx · Power Query",
     credentials: "Authentication",
     credentialsValue: "Bearer API key for this export",
-    refreshHint: "Configure refresh in Excel, for example Data → Queries & Connections or Refresh All.",
+    refreshHint: "Set Excel refresh to at least 5 minutes (Query Properties). The first load may be slow; later refreshes use the server cache.",
     refreshSummary: "Set in Excel",
     chooseDataset: "Choose at least one Excel table",
     save: "Save and enable Excel",
@@ -140,7 +140,7 @@ const EXCEL_COPY = {
     methodValue: ".xlsx · Power Query",
     credentials: "認証",
     credentialsValue: "このExport専用Bearer API key",
-    refreshHint: "更新間隔はExcel側で設定します（例: Data → Queries & Connections / Refresh All）。",
+    refreshHint: "Excelの更新間隔は5分以上を推奨します（Query Properties）。初回は遅い場合がありますが、次回以降はサーバーキャッシュで高速化されます。",
     refreshSummary: "Excelで設定",
     chooseDataset: "Excelテーブルを1つ以上選択してください",
     save: "保存してExcelを有効化",
@@ -2046,34 +2046,14 @@ in
   BaseUrl = "${baseUrl}",
   ApiPath = "api/excel/exports/${configId}",
   ApiKey = "${form.excelApiKey}",
-  Meta = Json.Document(Web.Contents(BaseUrl, [
+  Source = Json.Document(Web.Contents(BaseUrl, [
     RelativePath = ApiPath,
+    Query = [table = "production", all = "1"],
     Headers = [Authorization = "Bearer " & ApiKey],
-    Timeout = #duration(0, 0, 45, 0),
+    Timeout = #duration(0, 3, 0, 0),
     IsRetry = true
   ])),
-  StartDate = Date.FromText(Meta[defaultDateFrom]),
-  EndDate = Date.FromText(Meta[defaultDateTo]),
-  Windows = List.Generate(
-    () => [From = StartDate],
-    each [From] <= EndDate,
-    each [From = Date.AddDays([From], 7)],
-    each [From = [From], To = List.Min({Date.AddDays([From], 6), EndDate})]
-  ),
-  GetWindow = (Window as record) =>
-    Json.Document(Web.Contents(BaseUrl, [
-      RelativePath = ApiPath,
-      Query = [
-        table = "production",
-        #"from" = Date.ToText(Window[From], "yyyy-MM-dd"),
-        to = Date.ToText(Window[To], "yyyy-MM-dd")
-      ],
-      Headers = [Authorization = "Bearer " & ApiKey],
-      Timeout = #duration(0, 1, 0, 0),
-      IsRetry = true
-    ]))[value],
-  Rows = List.Combine(List.Transform(Windows, each GetWindow(_))),
-  Data = Table.FromRecords(Rows, null, MissingField.UseNull)
+  Data = Table.FromRecords(Source[value], null, MissingField.UseNull)
 in
   Data` : "";
   const presetLabel =
@@ -2318,6 +2298,7 @@ in
       {isExcel && excelQuery ? (
         <section className="ew-bi-connect">
           <QueryCopyBlock code={excelQuery} copyLabel={excelCopy.copyQuery} />
+          <p className="ew-muted">{excelCopy.refreshHint}</p>
         </section>
       ) : null}
         </>
