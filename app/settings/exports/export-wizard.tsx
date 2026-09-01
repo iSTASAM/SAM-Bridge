@@ -84,7 +84,7 @@ const EXCEL_COPY = {
     methodValue: ".xlsx · Power Query",
     credentials: "การยืนยันตัวตน",
     credentialsValue: "Bearer API key ของ Export นี้",
-    refreshHint: "หลังเปลี่ยนช่วงวัน ให้บันทึก แล้วคัดลอก Power Query ใหม่จากหน้านี้ จากนั้น Refresh ใน Excel (แนะนำทุก 5 นาทีขึ้นไป)",
+    refreshHint: "หลังเปลี่ยนช่วงวัน ให้บันทึก แล้วคัดลอก Power Query ใหม่ — ครั้งแรก 90 วันอาจใช้เวลาหลายนาที (ดึงทีละ 7 วัน) รอบถัดไปเร็วขึ้นจาก cache",
     refreshSummary: "กำหนดใน Excel",
     chooseDataset: "เลือกตาราง Excel อย่างน้อย 1 ตาราง",
     save: "บันทึกและเปิดใช้งาน Excel",
@@ -112,7 +112,7 @@ const EXCEL_COPY = {
     methodValue: ".xlsx · Power Query",
     credentials: "Authentication",
     credentialsValue: "Bearer API key for this export",
-    refreshHint: "After changing the history window, save, copy the Power Query again from this page, then refresh Excel (5+ minutes between refreshes is recommended).",
+    refreshHint: "After changing the window, save and copy the new Power Query. The first 90-day load may take several minutes (7-day chunks); later refreshes are faster from cache.",
     refreshSummary: "Set in Excel",
     chooseDataset: "Choose at least one Excel table",
     save: "Save and enable Excel",
@@ -140,7 +140,7 @@ const EXCEL_COPY = {
     methodValue: ".xlsx · Power Query",
     credentials: "認証",
     credentialsValue: "このExport専用Bearer API key",
-    refreshHint: "履歴期間を変更したら保存し、このページから Power Query を再コピーしてから Excel を更新してください（5分以上の間隔を推奨）。",
+    refreshHint: "履歴期間を変更したら保存し Power Query を再コピーしてください。初回の90日読み込みは数分かかる場合があります（7日ずつ）。次回以降はキャッシュで高速化されます。",
     refreshSummary: "Excelで設定",
     chooseDataset: "Excelテーブルを1つ以上選択してください",
     save: "保存してExcelを有効化",
@@ -2047,14 +2047,37 @@ in
   ApiPath = "api/excel/exports/${configId}",
   ApiKey = "${form.excelApiKey}",
   HistoryDays = ${form.excelSettings.historyDays},
-  Source = Json.Document(Web.Contents(BaseUrl, [
+  RequestHeaders = [Authorization = "Bearer " & ApiKey],
+  Meta = Json.Document(Web.Contents(BaseUrl, [
     RelativePath = ApiPath,
-    Query = [table = "production", all = "1", days = Text.From(HistoryDays)],
-    Headers = [Authorization = "Bearer " & ApiKey],
-    Timeout = #duration(0, 3, 0, 0),
+    Query = [days = Text.From(HistoryDays)],
+    Headers = RequestHeaders,
+    Timeout = #duration(0, 0, 45, 0),
     IsRetry = true
   ])),
-  Data = Table.FromRecords(Source[value], null, MissingField.UseNull)
+  StartDate = Date.FromText(Meta[defaultDateFrom]),
+  EndDate = Date.FromText(Meta[defaultDateTo]),
+  Windows = List.Generate(
+    () => [From = StartDate],
+    each [From] <= EndDate,
+    each [From = Date.AddDays([From], 7)],
+    each [From = [From], To = List.Min({Date.AddDays([From], 6), EndDate})]
+  ),
+  GetWindow = (Window as record) =>
+    Json.Document(Web.Contents(BaseUrl, [
+      RelativePath = ApiPath,
+      Query = [
+        table = "production",
+        #"from" = Date.ToText(Window[From], "yyyy-MM-dd"),
+        to = Date.ToText(Window[To], "yyyy-MM-dd"),
+        days = Text.From(HistoryDays)
+      ],
+      Headers = RequestHeaders,
+      Timeout = #duration(0, 1, 30, 0),
+      IsRetry = true
+    ]))[value],
+  Rows = List.Combine(List.Transform(Windows, each GetWindow(_))),
+  Data = Table.FromRecords(Rows, null, MissingField.UseNull)
 in
   Data` : "";
   const presetLabel =

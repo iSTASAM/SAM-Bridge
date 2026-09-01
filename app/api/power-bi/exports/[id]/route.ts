@@ -543,7 +543,9 @@ export async function serveTabularExport(request: Request, id: string, destinati
 
     const requestedHistoryDays = Number(url.searchParams.get("days"));
     if (
-      excelBulkHistory &&
+      destination === "excel" &&
+      table === "production" &&
+      url.searchParams.has("days") &&
       Number.isFinite(requestedHistoryDays) &&
       requestedHistoryDays !== settings.historyDays
     ) {
@@ -563,15 +565,21 @@ export async function serveTabularExport(request: Request, id: string, destinati
         ? await priorityLostTimeForDates(request.url, config.sourceConnectionId, range.from, range.to)
         : { values: new Map<string, Row>(), warnings: [] as Array<{ from: string; to: string; error: string }> };
       if (destination === "excel" && table === "production") {
-        const loaded = await awaitExcelLostTimeForDates(
-          request.url,
-          config.sourceConnectionId,
-          range.from,
-          range.to,
-          result.bodies,
-        );
-        lostTime.values = loaded.values;
-        lostTime.warnings.push(...loaded.warnings);
+        if (excelBulkHistory && range.days > 7) {
+          const cached = await cachedLostTimeForDates(config.sourceConnectionId, range.from, range.to, result.bodies);
+          lostTime.values = cached.values;
+          enqueueLostTimeWarm(request.url, config.sourceConnectionId, cached.missingDates);
+        } else {
+          const loaded = await awaitExcelLostTimeForDates(
+            request.url,
+            config.sourceConnectionId,
+            range.from,
+            range.to,
+            result.bodies,
+          );
+          lostTime.values = loaded.values;
+          lostTime.warnings.push(...loaded.warnings);
+        }
       }
       result.warnings.push(...lostTime.warnings);
       const bodies = result.bodies;
