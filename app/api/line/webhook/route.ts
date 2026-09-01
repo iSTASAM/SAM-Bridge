@@ -112,6 +112,8 @@ async function processAiMessage(input: {
       connectionIds: [input.connectionId],
       customerIds: input.customerId ? [input.customerId] : undefined,
       history,
+      channel: "line",
+      userId: input.lineUserId,
     });
     await appendLineAiHistory(input.lineUserId, "assistant", result.answer);
     const sent = await pushLineMessages(input.lineUserId, buildLineAiMessages(result));

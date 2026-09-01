@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FiPlus } from "react-icons/fi";
 import { useLocale } from "../locale-context";
 import { COPY } from "./connections/copy";
@@ -22,7 +22,6 @@ import type { IxacsCustomerOption } from "@/lib/ixacs-login";
 export default function ConnectionsPage() {
   const { locale } = useLocale();
   const copy = COPY[locale];
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -35,15 +34,12 @@ export default function ConnectionsPage() {
   const [canManage, setCanManage] = useState(false);
   const [customerOptions, setCustomerOptions] = useState<IxacsCustomerOption[]>([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
-  const listRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     const response = await fetch("/api/connections", { cache: "no-store" });
     const data = (await response.json()) as {
-      activeId?: string | null;
       connections?: Connection[];
     };
-    setActiveId(data.activeId ?? null);
     setConnections(data.connections ?? []);
     return data.connections ?? [];
   }, []);
@@ -54,21 +50,6 @@ export default function ConnectionsPage() {
       .then((response) => response.ok ? response.json() : null)
       .then((session) => setCanManage(session?.role === "admin"));
   }, [load]);
-
-  useEffect(() => {
-    function onPointer(event: MouseEvent) {
-      if (!listRef.current?.contains(event.target as Node)) setMenuId(null);
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuId(null);
-    }
-    document.addEventListener("mousedown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, []);
 
   function openNew() {
     setEditingId("new");
@@ -316,14 +297,6 @@ export default function ConnectionsPage() {
     setBusy(false);
   }
 
-  async function activate(id: string) {
-    setBusy(true);
-    setMenuId(null);
-    await fetch(`/api/connections/${id}`, { method: "PUT" });
-    await load();
-    setBusy(false);
-  }
-
   async function remove() {
     if (!deleteTarget) return;
     setBusy(true);
@@ -369,32 +342,28 @@ export default function ConnectionsPage() {
   const editorOpen = editingId !== null;
 
   return (
-    <div className="console-page">
-      <div className="machine-page">
-      <div className="machine-page-head">
-        <div>
+    <div className="console-page machine-page">
+      <header className="machine-page-head">
+        <div className="machine-page-intro">
           <h1 className="console-title">{copy.title}</h1>
         </div>
-        {canManage ? (
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={openNew}>
+        {canManage && connections.length > 0 ? (
+          <button type="button" className="btn btn-primary console-icon-btn" disabled={busy} onClick={openNew} aria-label={copy.add}>
             <FiPlus size={16} />
-            {copy.add}
           </button>
         ) : null}
-      </div>
+      </header>
 
       {pageFlash && !editorOpen ? (
-        <div className={`machine-feedback is-${pageFlash.kind}`} role="status">
-          {pageFlash.title ? <p className="machine-feedback-title">{pageFlash.title}</p> : null}
-          <p className={pageFlash.title ? "machine-feedback-body" : "machine-feedback-title"}>
-            {pageFlash.text}
-          </p>
+        <div className={`machine-callout is-${pageFlash.kind}`} role="status">
+          {pageFlash.title ? <strong>{pageFlash.title}</strong> : null}
+          <p>{pageFlash.text}</p>
         </div>
       ) : null}
 
       {connections.length === 0 ? (
-        <div className="empty-state">
-          <h3>{copy.emptyTitle}</h3>
+        <section className="machine-empty">
+          <h2>{copy.emptyTitle}</h2>
           <p>{copy.emptyBody}</p>
           {canManage ? (
             <button type="button" className="btn btn-primary" onClick={openNew}>
@@ -402,33 +371,41 @@ export default function ConnectionsPage() {
               {copy.add}
             </button>
           ) : null}
-        </div>
-      ) : (
-        <section className="machine-list-section">
-          <div className="machine-list" ref={listRef}>
-            {connections.map((item) => (
-              <MachineRow
-                key={item.id}
-                item={item}
-                copy={copy}
-                busy={busy}
-                testing={testingId === item.id}
-                menuOpen={menuId === item.id}
-                canActivate={item.id !== activeId}
-                canManage={canManage}
-                onTest={() => void sync(item.id, true)}
-                onEdit={() => openEdit(item)}
-                onDetails={() => openEdit(item)}
-                onUse={() => void activate(item.id)}
-                onDelete={() => {
-                  setMenuId(null);
-                  setDeleteTarget(item);
-                }}
-                onToggleMenu={() => setMenuId((current) => (current === item.id ? null : item.id))}
-              />
-            ))}
-          </div>
         </section>
+      ) : (
+        <div className="machine-table-wrap">
+          <table className="machine-table">
+            <thead>
+              <tr>
+                <th>{copy.colMachine}</th>
+                <th>{copy.colStatus}</th>
+                <th className="machine-table-actions-col">{copy.colActions}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {connections.map((item) => (
+                <MachineRow
+                  key={item.id}
+                  item={item}
+                  copy={copy}
+                  busy={busy}
+                  testing={testingId === item.id}
+                  menuOpen={menuId === item.id}
+                  canManage={canManage}
+                  onTest={() => void sync(item.id, true)}
+                  onEdit={() => openEdit(item)}
+                  onDetails={() => openEdit(item)}
+                  onDelete={() => {
+                    setMenuId(null);
+                    setDeleteTarget(item);
+                  }}
+                  onToggleMenu={() => setMenuId((current) => (current === item.id ? null : item.id))}
+                  onCloseMenu={() => setMenuId(null)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {editorOpen ? (
@@ -461,7 +438,6 @@ export default function ConnectionsPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => void remove()}
       />
-      </div>
     </div>
   );
 }

@@ -125,6 +125,7 @@
 .lw-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   padding-top: 4px;
   border-top: 1px solid var(--border);
 }

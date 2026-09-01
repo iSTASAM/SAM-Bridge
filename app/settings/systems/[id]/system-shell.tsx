@@ -24,10 +24,12 @@ export function SystemShell({
   onRefresh: () => void;
   children: React.ReactNode;
 }) {
+  const awaitingMachine = loading && !title;
   return (
     <SystemsStage
-      title={title}
+      title={title || copy.usersOf}
       lead={meta ?? undefined}
+      titleLoading={awaitingMachine}
       backHref="/settings/systems/line"
       backLabel={copy.back}
       actions={

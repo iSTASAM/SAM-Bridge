@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
 import path from "path";
 import { isSlackWebhookUrl } from "@/lib/slack-webhook";
 import { deleteExportRunState } from "@/lib/export-run-state";
@@ -50,12 +50,28 @@ const DEFAULT_POWER_BI_SETTINGS: PowerBiSettings = {
   includeDateDimension: true,
 };
 export type ExcelTable = "history" | "current";
-export type ExcelSettings = PowerBiSettings & {
-  tables: ExcelTable[]; refreshMinutes: 5 | 10 | 15; autoRefresh: boolean;
+export type ExcelSettings = Omit<PowerBiSettings, "historyDays"> & {
+  tables: ExcelTable[];
+  historyDays: number;
+  refreshMinutes: 5 | 10 | 15;
+  autoRefresh: boolean;
 };
+
+function bangkokDaysFromMonthStart(now = new Date()): number {
+  const day = Number(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", day: "numeric" }).format(now),
+  );
+  return Number.isFinite(day) && day > 0 ? day : 1;
+}
+
 const DEFAULT_EXCEL_SETTINGS: ExcelSettings = {
-  datasets: ["production"], tables: ["history", "current"], historyDays: 30,
-  includeLineDimension: false, includeDateDimension: false, refreshMinutes: 15, autoRefresh: true,
+  datasets: ["production"],
+  tables: ["history", "current"],
+  historyDays: bangkokDaysFromMonthStart(),
+  includeLineDimension: false,
+  includeDateDimension: false,
+  refreshMinutes: 15,
+  autoRefresh: false,
 };
 export type SapAction = "production-result" | "custom-mapping";
 export type SapSelectedOrder = {
@@ -286,7 +302,20 @@ function rowToConfig(row: DbRow): ExportConfig {
   }).config;
 }
 
-function configToRow(config: ExportConfig): Omit<DbRow, "created_at" | "updated_at"> & {
+function coerceSourceConnectionId(
+  connectionId: string,
+  validConnectionIds: ReadonlySet<string> | null,
+): string {
+  const id = connectionId.trim();
+  if (!id || !uuidOrNull(id)) return "";
+  if (!validConnectionIds) return id;
+  return validConnectionIds.has(id) ? id : "";
+}
+
+function configToRow(
+  config: ExportConfig,
+  validConnectionIds: ReadonlySet<string> | null = null,
+): Omit<DbRow, "created_at" | "updated_at"> & {
   created_at: string;
   updated_at: string;
 } {
@@ -294,7 +323,7 @@ function configToRow(config: ExportConfig): Omit<DbRow, "created_at" | "updated_
     id: config.id,
     name: config.name,
     description: config.description,
-    source_connection_id: uuidOrNull(config.sourceConnectionId),
+    source_connection_id: uuidOrNull(coerceSourceConnectionId(config.sourceConnectionId, validConnectionIds)),
     group_uuids: config.groupUuids,
     line_uuids: config.lineUuids,
     all_groups: config.allGroups,
@@ -360,6 +389,36 @@ function persistFile() {
   );
 }
 
+/** Remove a stale row from the legacy local file when Supabase is authoritative. */
+function purgeLocalExportConfig(id: string) {
+  if (!existsSync(STATE_FILE)) return;
+  try {
+    const parsed = JSON.parse(readFileSync(STATE_FILE, "utf8")) as {
+      configs?: Record<string, ExportConfig>;
+    };
+    if (!parsed.configs?.[id]) return;
+    delete parsed.configs[id];
+    if (Object.keys(parsed.configs).length === 0) {
+      unlinkSync(STATE_FILE);
+      return;
+    }
+    writeFileSync(STATE_FILE, JSON.stringify(parsed, null, 2), "utf8");
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
+async function loadValidConnectionIds() {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const { data, error } = await supabase.from("ixacs_connections").select("id");
+  if (error) {
+    console.warn("export_configs: could not load ixacs_connections for FK check:", error.message);
+    return null;
+  }
+  return new Set((data ?? []).map((row) => String(row.id)));
+}
+
 async function hydrateFromSupabase() {
   const supabase = getSupabaseAdmin();
   if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
@@ -367,14 +426,6 @@ async function hydrateFromSupabase() {
   if (error) throw new Error(`EXPORTS_LOAD_FAILED: ${error.message}`);
   const rows = (data as DbRow[] | null) ?? [];
   drafts = new Map(rows.map((row) => [row.id, rowToConfig(row)]));
-
-  if (drafts.size > 0) return;
-
-  const generatedApiKey = hydrateFromFile();
-  if (drafts.size === 0) return;
-  const { error: upsertError } = await supabase.from("export_configs").upsert([...drafts.values()].map(configToRow));
-  if (upsertError) throw new Error(`EXPORTS_MIGRATE_FAILED: ${upsertError.message}`);
-  if (generatedApiKey) persistFile();
 }
 
 async function fetchOneFromSupabase(id: string) {
@@ -407,7 +458,21 @@ async function persistConfig(config: ExportConfig) {
   if (supabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
-    const { error } = await supabase.from("export_configs").upsert(configToRow(config));
+    const validConnectionIds = await loadValidConnectionIds();
+    const coerced = {
+      ...config,
+      sourceConnectionId: coerceSourceConnectionId(config.sourceConnectionId, validConnectionIds),
+    };
+    if (
+      config.sourceConnectionId &&
+      !coerced.sourceConnectionId &&
+      validConnectionIds &&
+      !validConnectionIds.has(config.sourceConnectionId)
+    ) {
+      throw new Error("EXPORTS_CONNECTION_NOT_FOUND");
+    }
+    drafts.set(config.id, coerced);
+    const { error } = await supabase.from("export_configs").upsert(configToRow(coerced, validConnectionIds));
     if (error) throw new Error(`EXPORTS_SAVE_FAILED: ${error.message}`);
     return;
   }
@@ -416,16 +481,19 @@ async function persistConfig(config: ExportConfig) {
 
 async function removeConfig(id: string) {
   const current = drafts.get(id);
-  const removed = drafts.delete(id);
-  if (!removed) return false;
+  drafts.delete(id);
+
   if (supabaseConfigured()) {
     const supabase = getSupabaseAdmin();
     if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
     const { error } = await supabase.from("export_configs").delete().eq("id", id);
     if (error) throw new Error(`EXPORTS_DELETE_FAILED: ${error.message}`);
+    purgeLocalExportConfig(id);
   } else {
+    if (!current) return false;
     persistFile();
   }
+
   deleteExportRunState(id);
   deleteExportAlertState(id);
   if (current?.sapConnectionId) deleteSapConnection(current.sapConnectionId);
@@ -470,14 +538,20 @@ function powerBiSettings(value: unknown, fallback: PowerBiSettings): PowerBiSett
 }
 
 function excelSettings(value: unknown, fallback: ExcelSettings): ExcelSettings {
-  const normalized = powerBiSettings(value, fallback);
-  const item = value && typeof value === "object" ? value as Partial<ExcelSettings> : {};
+  const item = value && typeof value === "object" ? (value as Partial<ExcelSettings>) : {};
+  const rawDays = Number(item.historyDays);
+  const historyDays = Number.isFinite(rawDays)
+    ? Math.min(3660, Math.max(1, Math.round(rawDays)))
+    : fallback.historyDays;
+  const tables = strings(item.tables, fallback.tables).filter(
+    (table): table is ExcelTable => table === "history" || table === "current",
+  );
   return {
-    ...normalized,
     datasets: ["production"],
+    historyDays,
     includeLineDimension: false,
     includeDateDimension: false,
-    tables: strings(item.tables, fallback.tables).filter((table): table is ExcelTable => table === "history" || table === "current"),
+    tables: tables.length > 0 ? tables : [...fallback.tables],
     refreshMinutes: item.refreshMinutes === 5 || item.refreshMinutes === 10 ? item.refreshMinutes : 15,
     autoRefresh: typeof item.autoRefresh === "boolean" ? item.autoRefresh : fallback.autoRefresh,
   };
@@ -519,6 +593,14 @@ function applyInput(current: ExportConfig, input: ExportConfigInput): ExportConf
   if (current.sapConnectionId && current.sapConnectionId !== sapConnectionId) {
     deleteSapConnection(current.sapConnectionId);
   }
+  const resolvedExcelSettings = (() => {
+    const settings = excelSettings(input.excelSettings, current.excelSettings ?? DEFAULT_EXCEL_SETTINGS);
+    if (destinationType !== "excel") return settings;
+    return {
+      ...settings,
+      tables: settings.tables.length > 0 ? settings.tables : [...DEFAULT_EXCEL_SETTINGS.tables],
+    };
+  })();
   const next = {
     ...current,
     name: typeof input.name === "string" ? input.name.trim() : current.name,
@@ -582,7 +664,7 @@ function applyInput(current: ExportConfig, input: ExportConfigInput): ExportConf
       typeof input.includeNulls === "boolean" ? input.includeNulls : current.includeNulls,
     alertRules: alertRules(input.alertRules, current.alertRules ?? []),
     powerBiSettings: powerBiSettings(input.powerBiSettings, current.powerBiSettings ?? DEFAULT_POWER_BI_SETTINGS),
-    excelSettings: excelSettings(input.excelSettings, current.excelSettings ?? DEFAULT_EXCEL_SETTINGS),
+    excelSettings: resolvedExcelSettings,
     updatedAt: new Date().toISOString(),
   };
   return {
@@ -613,7 +695,12 @@ export async function getExportConfig(id: string) {
 }
 
 export async function createExportConfig(input: ExportConfigInput) {
-  await ensureHydrated();
+  if (supabaseConfigured()) {
+    await hydrateFromSupabase();
+    hydrated = true;
+  } else {
+    await ensureHydrated();
+  }
   const now = new Date().toISOString();
   const id = randomUUID();
   const draft = applyInput(
@@ -667,11 +754,16 @@ export async function updateExportConfig(id: string, input: ExportConfigInput) {
 }
 
 export async function deleteExportConfig(id: string) {
-  await ensureHydrated();
-  if (supabaseConfigured() && !drafts.has(id)) {
-    const existing = await fetchOneFromSupabase(id);
-    if (existing) drafts.set(id, existing);
+  if (supabaseConfigured()) {
+    if (!drafts.has(id)) {
+      const existing = await fetchOneFromSupabase(id);
+      if (!existing) return false;
+      drafts.set(id, existing);
+    }
+    return removeConfig(id);
   }
+  await ensureHydrated();
+  if (!drafts.has(id)) return false;
   return removeConfig(id);
 }
 

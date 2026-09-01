@@ -943,6 +943,58 @@
   text-align: right;
 }
 
+.ew-excel-dest {
+  max-width: 640px;
+  margin-top: 4px;
+}
+
+.ew-excel-dest-lead {
+  margin: 0 0 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ew-excel-dest-facts {
+  margin: 0;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.ew-excel-dest-facts > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
+  gap: 12px 20px;
+  align-items: baseline;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ew-excel-dest-facts > div:last-child {
+  border-bottom: 0;
+}
+
+.ew-excel-dest-facts dt {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.ew-excel-dest-facts dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ew-excel-dest-hint {
+  margin-top: 14px;
+}
+
 .ew-custom-toolbar {
   display: flex;
   align-items: center;
@@ -1864,34 +1916,91 @@
   width: fit-content;
 }
 
-.ew-excel-columns {
+.ew-query-copy {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ew-bi-connect .ew-query-pre {
+  position: relative;
+  margin: 0;
+  padding: 40px 12px 12px;
+  border-radius: 9px;
+  background: var(--surface-subtle);
+  color: var(--text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: auto;
+}
+
+.ew-query-copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.ew-query-copy-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+
+.ew-excel-columns {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 10px;
 }
 
 .ew-excel-columns span {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--surface);
 }
 
-.ew-excel-columns em {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: #185c37;
-  color: #fff;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 700;
+.ew-excel-columns code {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.ew-excel-history {
+  max-width: 420px;
+}
+
+.ew-excel-history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.ew-excel-history-row .machine-input {
+  max-width: 120px;
+}
+
+.ew-excel-history-unit {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.ew-excel-history .machine-help {
+  display: block;
+  margin-top: 8px;
 }
 
 @media (max-width: 720px) {

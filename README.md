@@ -49,3 +49,16 @@ PUSH_API_KEY=your-secret-key
 ## ส่งสถานะกลับไป iXacs
 
 เพิ่ม iXacs connection และเข้าสู่ระบบจากหน้า `/settings` ระบบจะเก็บ session ไว้กับ connection และเข้าสู่ระบบใหม่ให้อัตโนมัติเมื่อ session หมดอายุ จากนั้นส่ง `productionLineUuid` + `andonStatusStyleUuid` ไปที่ `/ct-monitor/api/ctMonitor/regist`
+
+## Slack
+
+1. รัน migration `supabase/migrations/016_slack_notifications.sql` ใน Supabase ก่อน deploy
+2. สร้าง Slack App แล้วเปิด Incoming Webhooks จากนั้นเพิ่ม webhook ให้ channel ที่ต้องการ
+3. เพิ่ม Bot Token Scopes `app_mentions:read` และ `chat:write` แล้วติดตั้งหรือติดตั้ง App ใหม่ใน Workspace
+4. เชิญ Bot เข้า channel เดียวกับ Incoming Webhook และคัดลอก Channel ID
+5. เปิด Event Subscriptions และตั้ง Request URL เป็น `https://<production-domain>/api/slack/events`
+6. สมัคร Bot Event เฉพาะ `app_mention` ไม่ต้องสมัคร Direct Message event
+7. ที่ `/settings/systems/slack` กรอก Production URL, Incoming Webhook, Channel ID, Bot User OAuth Token และ Signing Secret
+8. สร้าง Notification Rule โดยเลือกเครื่อง/ไลน์และสถานะที่ต้องการแจ้งเตือน
+
+การแจ้งเตือนสถานะทำงานจาก push event ของ iXacs และส่งทันทีโดยไม่ใช้ cron ส่วน Bot จะตอบเฉพาะข้อความที่ `@mention` ใน channel ที่ตั้งค่าไว้เท่านั้น

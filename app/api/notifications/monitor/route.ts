@@ -1,32 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listNotificationRules, recordNotificationRun } from "@/lib/notification-configs";
-import { monitorSlackNotification } from "@/lib/notification-runner";
 import { monitorLineNotifications } from "@/lib/line-notification-runner";
+import { ensureNotificationMonitorLoop } from "@/lib/notification-monitor-loop";
+import { monitorSlackNotifications } from "@/lib/notification-runner";
 
 export const dynamic = "force-dynamic";
 
 async function runMonitors() {
-  const results = [];
-  for (const rule of listNotificationRules().filter((item) => item.enabled)) {
-    try {
-      const result = await monitorSlackNotification(rule);
-      recordNotificationRun(rule.id, true);
-      results.push({ id: rule.id, ok: true, ...result });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "MONITOR_FAILED";
-      recordNotificationRun(rule.id, false, message);
-      results.push({ id: rule.id, ok: false, error: message });
-    }
-  }
+  ensureNotificationMonitorLoop();
+  const slack = await monitorSlackNotifications();
   const line = await monitorLineNotifications();
   return NextResponse.json({
-    ok: results.every((item) => item.ok) && line.errors.length === 0,
-    results,
+    ok: slack.errors.length === 0 && line.errors.length === 0,
+    slack,
     line,
   });
 }
 
 function cronAuthorized(request: NextRequest) {
+  if (request.headers.get("x-vercel-cron") === "1") return true;
   const secret = process.env.CRON_SECRET?.trim();
   if (!secret) return false;
   const header = request.headers.get("authorization")?.trim() ?? "";

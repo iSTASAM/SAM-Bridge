@@ -34,12 +34,20 @@ export function providerPublic(item: {
 export async function getProviderResponse(id: string) {
   const current = await getAiProvider(id);
   if (!current) return NextResponse.json({ connected: false, models: [] });
+  let models: Array<{ id: string; name: string }> = [];
+  let modelsError = "";
+  try {
+    models = await listProviderModels(current.kind, current.apiKey, current.baseUrl);
+  } catch (error) {
+    modelsError = error instanceof Error ? error.message : "Unable to load models";
+  }
   return NextResponse.json({
     connected: true,
     keyLast4: current.keyLast4,
     model: current.model,
     lastTestedAt: current.lastTestedAt ?? current.updatedAt,
-    models: current.model ? [{ id: current.model, name: current.model }] : [],
+    models: models.length ? models : current.model ? [{ id: current.model, name: current.model }] : [],
+    ...(modelsError ? { modelsError } : {}),
   });
 }
 
@@ -59,33 +67,40 @@ export async function saveProviderResponse(
   if (!apiKey) return NextResponse.json({ error: "API key is required" }, { status: 400 });
 
   try {
-    const models = input.kind === "custom" ? [] : await listProviderModels(input.kind, apiKey);
+    const baseUrl = typeof body.baseUrl === "string" ? body.baseUrl.trim() : current?.baseUrl ?? "";
+    const models = await listProviderModels(input.kind, apiKey, baseUrl);
+    if (input.kind !== "custom" && models.length === 0) {
+      return NextResponse.json({ error: "No compatible models are available for this API key" }, { status: 400 });
+    }
     const model = typeof body.model === "string" ? body.model.trim() : current?.model ?? "";
     if (body.testOnly) {
-      if (input.kind === "custom") {
-        const baseUrl = typeof body.baseUrl === "string" ? body.baseUrl.trim() : current?.baseUrl ?? "";
-        if (!baseUrl) return NextResponse.json({ error: "Base URL is required" }, { status: 400 });
-        if (!model) return NextResponse.json({ error: "Model is required" }, { status: 400 });
+      const requestedModel = typeof body.model === "string" ? body.model.trim() : "";
+      const testModel = requestedModel && (
+        models.some((item) => item.id === requestedModel) || (input.kind === "custom" && models.length === 0)
+      )
+        ? requestedModel
+        : "";
+      if (testModel) {
         const now = new Date().toISOString();
         await completeAiText({
           id: input.id,
-          kind: "custom",
-          name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : input.name || "Custom",
+          kind: input.kind,
+          name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : input.name || NAMES[input.kind],
           apiKey,
           keyLast4: apiKey.slice(-4),
-          model,
+          model: testModel,
           baseUrl,
           lastTestedAt: now,
           createdAt: now,
           updatedAt: now,
-        }, model, "Reply with only the word OK.");
+        }, testModel, "Reply with only the word OK.", { feature: "general", skipLog: true });
       }
       return NextResponse.json({
         connected: true,
         keyLast4: apiKey.slice(-4),
-        model,
+        model: testModel || model || models[0]?.id || "",
         lastTestedAt: new Date().toISOString(),
-        models: models.length ? models : model ? [{ id: model, name: model }] : [],
+        models: models.length ? models : testModel ? [{ id: testModel, name: testModel }] : [],
       });
     }
     if (models.length && !models.some((item) => item.id === model)) {
@@ -98,7 +113,7 @@ export async function saveProviderResponse(
       name: typeof body.name === "string" && body.name.trim() ? body.name.trim() : input.name || NAMES[input.kind],
       apiKey,
       model,
-      baseUrl: typeof body.baseUrl === "string" ? body.baseUrl.trim() : "",
+      baseUrl,
     });
     return NextResponse.json({
       connected: true,
@@ -109,7 +124,7 @@ export async function saveProviderResponse(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI provider failed";
-    const status = message.includes("ENCRYPTION") || message.includes("SUPABASE") ? 503 : 502;
+    const status = message.includes("ENCRYPTION") || message.includes("SUPABASE") ? 503 : 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

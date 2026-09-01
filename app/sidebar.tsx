@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  FiBell,
   FiGrid,
   FiHome,
   FiInbox,
@@ -24,14 +23,16 @@ import { SIDEBAR_HIDDEN_STORAGE_KEY } from "./sidebar-pref";
 const COPY = {
   th: {
     brand: "SAM Bridge",
-    home: "หน้าแรก",
+    home: "Home",
+    getStarted: "Get started",
     devices: "iXacs",
     push: "Push API",
+    coreConcepts: "Core concepts",
     sources: "Data Sources",
     models: "AI Models",
     gptActions: "GPT Actions",
     exports: "Data Export",
-    notifications: "Notifications",
+    sdksAndCli: "SDKs and CLI",
     systems: "Admin Systems",
     logout: "ออกจากระบบ",
     openMenu: "เปิดเมนู",
@@ -40,17 +41,20 @@ const COPY = {
     showSidebar: "แสดงแถบด้านข้าง",
     mockUser: "SAM",
     mockRole: "ผู้ดูแลระบบ",
+    accountSettings: "ตั้งค่าบัญชี",
   },
   en: {
     brand: "SAM Bridge",
     home: "Home",
+    getStarted: "Get started",
     devices: "iXacs",
     push: "Push API",
+    coreConcepts: "Core concepts",
     sources: "Data Sources",
     models: "AI Models",
     gptActions: "GPT Actions",
     exports: "Data Export",
-    notifications: "Notifications",
+    sdksAndCli: "SDKs and CLI",
     systems: "Admin Systems",
     logout: "Log out",
     openMenu: "Open menu",
@@ -59,17 +63,20 @@ const COPY = {
     showSidebar: "Show sidebar",
     mockUser: "SAM",
     mockRole: "Administrator",
+    accountSettings: "Account settings",
   },
   ja: {
     brand: "SAM Bridge",
-    home: "ホーム",
+    home: "Home",
+    getStarted: "Get started",
     devices: "iXacs",
     push: "Push API",
+    coreConcepts: "Core concepts",
     sources: "Data Sources",
     models: "AI Models",
     gptActions: "GPT Actions",
     exports: "Data Export",
-    notifications: "Notifications",
+    sdksAndCli: "SDKs and CLI",
     systems: "Admin Systems",
     logout: "ログアウト",
     openMenu: "メニューを開く",
@@ -78,6 +85,7 @@ const COPY = {
     showSidebar: "サイドバーを表示",
     mockUser: "SAM",
     mockRole: "管理者",
+    accountSettings: "アカウント設定",
   },
 } as const;
 
@@ -123,26 +131,59 @@ export function AppSidebar({
   const { locale } = useLocale();
   const copy = COPY[locale];
   const [open, setOpen] = useState(false);
-  const [session, setSession] = useState<{ role: "admin" | "user"; username: string } | null>(null);
+  const [session, setSession] = useState<{
+    role: "admin" | "user";
+    username: string;
+    displayName?: string;
+    avatarUrl?: string;
+  } | null>(null);
 
   useEffect(() => {
-    void fetch("/api/session", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() : null)
-      .then((value) => setSession(value && (value.role === "admin" || value.role === "user") ? value : null));
+    function loadSession() {
+      void fetch("/api/session", { cache: "no-store" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((value) => setSession(value && (value.role === "admin" || value.role === "user") ? value : null));
+    }
+    loadSession();
+    window.addEventListener("profile-updated", loadSession);
+    return () => window.removeEventListener("profile-updated", loadSession);
   }, []);
 
-  const nav = [
-    { href: "/home", label: copy.home, exact: true, icon: FiHome },
-    { href: "/settings", label: copy.devices, exact: false, icon: FiServer },
-    { href: "/settings/push", label: copy.push, exact: false, icon: FiKey },
-    ...(session?.role === "admin" ? [
-      { href: "/settings/sources", label: copy.sources, exact: false, icon: FiInbox },
-      { href: "/settings/gpt-actions", label: copy.gptActions, exact: false, icon: OpenAIIcon },
-      { href: "/settings/exports", label: copy.exports, exact: false, icon: FiSend },
-      { href: "/settings/notifications", label: copy.notifications, exact: false, icon: FiBell },
-      { href: "/settings/systems", label: copy.systems, exact: false, icon: FiGrid },
-    ] : []),
-  ] as const;
+  const navGroups = [
+    {
+      title: null,
+      items: [
+        { href: "/home", label: copy.home, exact: true, icon: FiHome, isHome: true },
+      ],
+    },
+    {
+      title: copy.getStarted,
+      items: [
+        { href: "/settings", label: copy.devices, exact: false, icon: FiServer, isHome: false },
+        { href: "/settings/push", label: copy.push, exact: false, icon: FiKey, isHome: false },
+      ],
+    },
+    {
+      title: copy.coreConcepts,
+      items: [
+        ...(session?.role === "admin"
+          ? [
+              { href: "/settings/sources", label: copy.sources, exact: false, icon: FiInbox, isHome: false },
+              { href: "/settings/gpt-actions", label: copy.gptActions, exact: false, icon: OpenAIIcon, isHome: false },
+              { href: "/settings/exports", label: copy.exports, exact: false, icon: FiSend, isHome: false },
+            ]
+          : []),
+      ],
+    },
+    {
+      title: copy.sdksAndCli,
+      items: [
+        ...(session?.role === "admin"
+          ? [{ href: "/settings/systems", label: copy.systems, exact: false, icon: FiGrid, isHome: false }]
+          : []),
+      ],
+    },
+  ];
 
   async function logout() {
     await fetch("/api/logout", { method: "POST" });
@@ -164,7 +205,7 @@ export function AppSidebar({
         <Link href="/home" className="font-display text-sm tracking-wide">
           {copy.brand}
         </Link>
-        <AppToolbar />
+        <AppToolbar showDocs />
       </header>
 
       {open ? (
@@ -198,38 +239,57 @@ export function AppSidebar({
         </div>
 
         <nav className="app-nav" aria-label={copy.brand}>
-          {nav.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              item.href === "/settings"
-                ? pathname === "/settings" || /^\/settings\/[^/]+\/data(?:\/|$)/.test(pathname)
-                : active(pathname, item.href, item.exact);
+          {navGroups.map((group, groupIdx) => {
+            if (group.items.length === 0) return null;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`app-nav-item ${isActive ? "is-active" : ""}`}
-                title={hidden ? item.label : undefined}
-                aria-label={hidden ? item.label : undefined}
-                onClick={() => setOpen(false)}
-              >
-                <Icon size={18} />
-                <span className="app-nav-label">{item.label}</span>
-              </Link>
+              <div key={groupIdx} className="app-nav-group">
+                {group.title && <div className="app-nav-section-title">{group.title}</div>}
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive =
+                    item.href === "/settings"
+                      ? pathname === "/settings" || /^\/settings\/[^/]+\/data(?:\/|$)/.test(pathname)
+                      : active(pathname, item.href, item.exact);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`app-nav-item ${item.isHome ? "is-home" : ""} ${isActive ? "is-active" : ""}`}
+                      title={hidden ? item.label : undefined}
+                      aria-label={hidden ? item.label : undefined}
+                      onClick={() => setOpen(false)}
+                    >
+                      <Icon size={17} className="app-nav-icon" />
+                      <span className="app-nav-label">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
 
         <div className="app-sidebar-foot">
-          <div className="app-sidebar-user">
-            <img src="/mock-user.svg" alt="" className="app-sidebar-user-avatar" width={36} height={34} />
+          <Link
+            href="/settings/profile"
+            className="profile-sidebar-link"
+            title={copy.accountSettings}
+            onClick={() => setOpen(false)}
+          >
+            <img
+              src={session?.avatarUrl || "/mock-user.svg"}
+              alt=""
+              className="app-sidebar-user-avatar"
+              width={36}
+              height={34}
+            />
             <div className="app-sidebar-user-copy">
-              <p className="app-sidebar-user-name">{session?.username ?? copy.mockUser}</p>
+              <p className="app-sidebar-user-name">{session?.displayName ?? session?.username ?? copy.mockUser}</p>
               <p className="app-sidebar-user-role">
                 {session?.role === "admin" ? copy.mockRole : session ? "User" : copy.mockRole}
               </p>
             </div>
-          </div>
+          </Link>
           <button
             type="button"
             className="app-icon-btn"

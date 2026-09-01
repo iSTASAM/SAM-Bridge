@@ -8,6 +8,7 @@ export type AuthSession = {
   role: AuthRole;
   username: string;
   connectionId?: string;
+  adminAccountId?: string;
   expiresAt: number;
 };
 

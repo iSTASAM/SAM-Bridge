@@ -8,7 +8,6 @@ import { useLocale } from "@/app/locale-context";
 import type { Connection } from "../connections/types";
 import { NOTIFY_COPY } from "./copy";
 import {
-  CHANNELS,
   ChannelIcon,
   StatusChip,
   channelName,
@@ -56,7 +55,7 @@ function buildSelectableCustomers(connections: Connection[]) {
   return { groups, singles };
 }
 
-export function NotificationSetup({ ruleId }: { ruleId?: string }) {
+export function NotificationSetup({ ruleId, embedded = false }: { ruleId?: string; embedded?: boolean }) {
   const router = useRouter();
   const { locale } = useLocale();
   const copy = NOTIFY_COPY[locale];
@@ -64,7 +63,7 @@ export function NotificationSetup({ ruleId }: { ruleId?: string }) {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [machinesLoading, setMachinesLoading] = useState(true);
   const [ruleLoading, setRuleLoading] = useState(isEdit);
-  const [channel, setChannel] = useState<ChannelId | null>(null);
+  const [channel, setChannel] = useState<ChannelId | null>("slack");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [groups, setGroups] = useState<ProductionGroup[]>([]);
   const [statusesByLineCatalog, setStatusesByLineCatalog] = useState<Record<string, IxacsStatusOption[]>>({});
@@ -77,6 +76,7 @@ export function NotificationSetup({ ruleId }: { ruleId?: string }) {
   const [activeStatusLine, setActiveStatusLine] = useState<string | null>(null);
   const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookConfigured, setWebhookConfigured] = useState(false);
+  const [globalWebhookConfigured, setGlobalWebhookConfigured] = useState(false);
   const [saving, setSaving] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const detailFetchedRef = useRef(new Set<string>());
@@ -125,6 +125,13 @@ export function NotificationSetup({ ruleId }: { ruleId?: string }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/slack/settings", { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() as Promise<{ incomingWebhookConfigured?: boolean }> : null)
+      .then((settings) => setGlobalWebhookConfigured(Boolean(settings?.incomingWebhookConfigured)))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -312,7 +319,7 @@ export function NotificationSetup({ ruleId }: { ruleId?: string }) {
   );
   const canPreview = Boolean(
     channel === "slack" &&
-      (webhookUrl.trim() || (isEdit && webhookConfigured)) &&
+      (webhookUrl.trim() || globalWebhookConfigured || (isEdit && webhookConfigured)) &&
       selectedMachine &&
       selectedLines.length > 0 &&
       totalStatusPicks > 0,
@@ -338,7 +345,7 @@ export function NotificationSetup({ ruleId }: { ruleId?: string }) {
 
   async function addDraft() {
     if (!channel || !selectedMachine || selectedLines.length === 0 || totalStatusPicks === 0) return;
-    if (!webhookUrl.trim() && !(isEdit && webhookConfigured)) return;
+    if (!webhookUrl.trim() && !globalWebhookConfigured && !(isEdit && webhookConfigured)) return;
     const statusByLineFull: Record<string, IxacsStatusOption[]> = {};
     for (const line of selectedLines) {
       const ids = statusByLine[line.uuid] ?? [];
@@ -374,14 +381,15 @@ export function NotificationSetup({ ruleId }: { ruleId?: string }) {
       setSaving(false);
       return;
     }
-    router.push("/settings/notifications");
+    router.push("/settings/systems/slack");
+    router.refresh();
   }
 
   return (
-    <div className="console-page notify-page">
+    <div className={embedded ? "notify-page" : "console-page notify-page"}>
       <header className="notify-head">
         <div>
-          <Link href="/settings/notifications" className="notify-back">
+          <Link href="/settings/systems/slack" className="notify-back">
             <FiArrowLeft size={15} aria-hidden />
             {copy.backToList}
           </Link>
@@ -405,28 +413,12 @@ export function NotificationSetup({ ruleId }: { ruleId?: string }) {
             <h2 id="notify-step-channel">{copy.stepChannel}</h2>
             <p>{copy.stepChannelHint}</p>
           </div>
-          <div className="notify-dest-row" role="radiogroup" aria-label={copy.stepChannel}>
-            {CHANNELS.map((id) => {
-              const active = channel === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  className={`notify-dest ${active ? "is-active" : ""}`}
-                  onClick={() => setChannel(id)}
-                  disabled={id !== "slack"}
-                  title={id !== "slack" ? copy.comingSoon : undefined}
-                >
-                  <span className="notify-dest-icon">
-                    <ChannelIcon id={id} size={24} />
-                  </span>
-                  <strong>{channelName(copy, id)}</strong>
-                  {active ? <FiCheck size={16} className="notify-dest-check" aria-hidden /> : null}
-                </button>
-              );
-            })}
+          <div className="notify-dest-row">
+            <div className="notify-dest is-active">
+              <span className="notify-dest-icon"><ChannelIcon id="slack" size={24} /></span>
+              <strong>{channelName(copy, "slack")}</strong>
+              <FiCheck size={16} className="notify-dest-check" aria-hidden />
+            </div>
           </div>
           {channel === "slack" ? (
             <label className="machine-field notify-webhook-field">
@@ -438,7 +430,9 @@ export function NotificationSetup({ ruleId }: { ruleId?: string }) {
                 placeholder={
                   isEdit && webhookConfigured
                     ? "••••••••••••••••"
-                    : "https://hooks.slack.com/services/..."
+                    : globalWebhookConfigured
+                      ? "ใช้ Incoming Webhook จากหน้า System / Slack"
+                      : "https://hooks.slack.com/services/..."
                 }
                 value={webhookUrl}
                 onChange={(event) => setWebhookUrl(event.target.value)}

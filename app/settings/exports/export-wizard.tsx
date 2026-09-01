@@ -8,6 +8,7 @@ import {
   FiCheck,
   FiChevronDown,
   FiChevronRight,
+  FiCopy,
 } from "react-icons/fi";
 import { useLocale } from "../../locale-context";
 import type { Connection } from "../connections/types";
@@ -26,6 +27,7 @@ import {
   WIZARD_SECTION_META,
   DEFAULT_POWER_BI_SETTINGS,
   DEFAULT_EXCEL_SETTINGS,
+  bangkokDaysFromMonthStart,
   type AlertRule,
   type DataPreset,
   type DestinationType,
@@ -35,7 +37,6 @@ import {
   type PowerBiDataset,
   type PowerBiSettings,
   type ExcelSettings,
-  type ExcelTable,
   type ScopeMode,
   type SourceGroup,
   type WizardStep,
@@ -74,9 +75,90 @@ const POWER_BI_SAVE_COPY = {
 } as const;
 
 const EXCEL_COPY = {
-  th: { modelTitle: "เลือกข้อมูลสำหรับ Excel", modelHelp: "ดาวน์โหลดเป็นไฟล์ .xlsx ได้ทันที หรือเชื่อมต่อผ่าน Power Query เพื่อ Refresh ใน workbook เดิม", setupTitle: "การเชื่อมต่อ Microsoft Excel", setupHelp: "ดาวน์โหลดไฟล์ .xlsx ได้จากหน้านี้ และใช้ได้กับไฟล์ .xlsx / .xlsm ผ่าน Power Query", method: "วิธีรับข้อมูล", methodValue: "ดาวน์โหลด .xlsx และ Power Query (Web API)", refresh: "Refresh อัตโนมัติ", credentials: "การยืนยันตัวตน", credentialsValue: "Bearer API key แยกสำหรับ Export นี้", refreshTitle: "รอบการอัปเดตใน Excel", minutes: "นาที", workbookNote: "Excel ต้องเปิดอยู่จึงจะ Refresh ตามรอบได้", chooseDataset: "เลือกตาราง Excel อย่างน้อย 1 ตาราง", save: "บันทึกและเปิดใช้งาน Excel", saving: "กำลังเปิดใช้งาน…", api: "Excel API", query: "Power Query (M)", copyQuery: "คัดลอก Power Query", copyVba: "คัดลอก VBA AutoRefresh", download: "ดาวน์โหลดไฟล์ Excel", downloading: "กำลังสร้างไฟล์…", downloadFail: "สร้างไฟล์ Excel ไม่สำเร็จ", install: "หรือวางโค้ดใน Excel → Data → Get Data → Blank Query → Advanced Editor แล้วเลือก Close & Load To… เพื่อโหลดลงชีตข้อมูล", tableName: "ชื่อตารางใน Excel", model: "Excel workbook (.xlsx)", selectTables: "เลือกตารางที่จะใช้", historyTable: "ข้อมูลย้อนหลังถึงปัจจุบัน", historyHelp: "ข้อมูลรายวันตามช่วงย้อนหลังที่เลือก", currentTable: "ข้อมูลปัจจุบัน", currentHelp: "Snapshot ล่าสุดเหมือนหน้า Realtime ทุกครั้งที่ Refresh", autoRefresh: "เปิด AutoRefresh ขณะ Excel เปิดอยู่" },
-  en: { modelTitle: "Choose data for Excel", modelHelp: "Download a .xlsx file immediately, or connect through Power Query to refresh an existing workbook.", setupTitle: "Microsoft Excel connection", setupHelp: "Download a .xlsx file here, or refresh .xlsx / .xlsm workbooks through Power Query.", method: "Data access", methodValue: ".xlsx download and Power Query (Web API)", refresh: "Automatic refresh", credentials: "Authentication", credentialsValue: "A dedicated Bearer API key for this export", refreshTitle: "Excel refresh interval", minutes: "minutes", workbookNote: "The workbook must be open for interval refresh.", chooseDataset: "Choose at least one Excel table", save: "Save and enable Excel", saving: "Enabling…", api: "Excel API", query: "Power Query (M)", copyQuery: "Copy Power Query", copyVba: "Copy AutoRefresh VBA", download: "Download Excel file", downloading: "Building file…", downloadFail: "Could not build the Excel file", install: "Or in Excel, open Data → Get Data → Blank Query → Advanced Editor, paste the code, then use Close & Load To…", tableName: "Excel table name", model: "Excel workbook (.xlsx)", selectTables: "Choose Excel tables", historyTable: "History through today", historyHelp: "Daily records for the selected history window.", currentTable: "Current production", currentHelp: "Latest snapshot matching the Realtime page on every refresh.", autoRefresh: "Enable AutoRefresh while Excel is open" },
-  ja: { modelTitle: "Excel用データを選択", modelHelp: ".xlsxをすぐにダウンロードするか、Power Queryで既存ブックを更新できます。", setupTitle: "Microsoft Excel接続", setupHelp: "ここで.xlsxをダウンロードするか、Power Queryで.xlsx/.xlsmを更新できます。", method: "データ取得", methodValue: ".xlsxダウンロードとPower Query (Web API)", refresh: "自動更新", credentials: "認証", credentialsValue: "Export専用Bearer API key", refreshTitle: "Excel更新間隔", minutes: "分", workbookNote: "定期更新にはExcelを開いておく必要があります。", chooseDataset: "Excelテーブルを1つ以上選択してください", save: "保存してExcelを有効化", saving: "有効化中…", api: "Excel API", query: "Power Query (M)", copyQuery: "Power Queryをコピー", copyVba: "AutoRefresh VBAをコピー", download: "Excelファイルをダウンロード", downloading: "ファイル作成中…", downloadFail: "Excelファイルを作成できませんでした", install: "または Excelの Data → Get Data → Blank Query → Advanced Editor に貼り付け、Close & Load To…を選択します。", tableName: "Excelテーブル名", model: "Excel workbook (.xlsx)", selectTables: "Excelテーブルを選択", historyTable: "履歴から現在まで", historyHelp: "選択した期間の日次データ。", currentTable: "現在の生産データ", currentHelp: "更新時にRealtime画面と同じ最新Snapshotを取得。", autoRefresh: "Excelを開いている間AutoRefreshを有効化" },
+  th: {
+    modelTitle: "เลือกข้อมูลสำหรับ Excel",
+    modelHelp: "ตรวจคอลัมน์ที่จะได้ และกำหนดช่วงวันย้อนหลังสำหรับตารางประวัติ",
+    setupTitle: "Microsoft Excel",
+    setupHelp: "รับข้อมูลผ่านไฟล์ .xlsx หรือ Power Query — กำหนดรอบ Refresh ได้เองใน Excel",
+    method: "วิธีรับข้อมูล",
+    methodValue: ".xlsx · Power Query",
+    credentials: "การยืนยันตัวตน",
+    credentialsValue: "Bearer API key ของ Export นี้",
+    refreshHint: "ตั้งรอบ Refresh ใน Excel ได้เอง เช่น Data → Queries & Connections หรือ Refresh All",
+    refreshSummary: "กำหนดใน Excel",
+    chooseDataset: "เลือกตาราง Excel อย่างน้อย 1 ตาราง",
+    save: "บันทึกและเปิดใช้งาน Excel",
+    saving: "กำลังเปิดใช้งาน…",
+    api: "Excel API",
+    query: "Power Query (M)",
+    copyQuery: "คัดลอก Power Query",
+    download: "ดาวน์โหลดไฟล์ Excel",
+    downloading: "กำลังสร้างไฟล์…",
+    downloadFail: "สร้างไฟล์ Excel ไม่สำเร็จ",
+    install: "ใน Excel: Data → Get Data → Blank Query → Advanced Editor แล้ว Close & Load To…",
+    tableName: "คอลัมน์ใน Excel",
+    model: "Excel workbook (.xlsx)",
+    historyRange: "ช่วงข้อมูลย้อนหลัง",
+    historyRangeHelp: "ค่าเริ่มต้นคือต้นเดือนถึงวันนี้ — แก้จำนวนวันได้ตามต้องการ",
+    monthToDate: "ต้นเดือนถึงวันนี้",
+    days: "วัน",
+  },
+  en: {
+    modelTitle: "Choose data for Excel",
+    modelHelp: "Review the columns you will get, and set how many history days to include.",
+    setupTitle: "Microsoft Excel",
+    setupHelp: "Get data via .xlsx or Power Query — set refresh timing yourself in Excel.",
+    method: "Data access",
+    methodValue: ".xlsx · Power Query",
+    credentials: "Authentication",
+    credentialsValue: "Bearer API key for this export",
+    refreshHint: "Configure refresh in Excel, for example Data → Queries & Connections or Refresh All.",
+    refreshSummary: "Set in Excel",
+    chooseDataset: "Choose at least one Excel table",
+    save: "Save and enable Excel",
+    saving: "Enabling…",
+    api: "Excel API",
+    query: "Power Query (M)",
+    copyQuery: "Copy Power Query",
+    download: "Download Excel file",
+    downloading: "Building file…",
+    downloadFail: "Could not build the Excel file",
+    install: "In Excel: Data → Get Data → Blank Query → Advanced Editor, then Close & Load To…",
+    tableName: "Excel columns",
+    model: "Excel workbook (.xlsx)",
+    historyRange: "History window",
+    historyRangeHelp: "Default is month-to-date (1st through today). Change the day count anytime.",
+    monthToDate: "Month to date",
+    days: "days",
+  },
+  ja: {
+    modelTitle: "Excel用データを選択",
+    modelHelp: "取得する列を確認し、履歴の日数を設定します。",
+    setupTitle: "Microsoft Excel",
+    setupHelp: ".xlsxまたはPower Queryで取得します。更新間隔はExcel側で設定してください。",
+    method: "データ取得",
+    methodValue: ".xlsx · Power Query",
+    credentials: "認証",
+    credentialsValue: "このExport専用Bearer API key",
+    refreshHint: "更新間隔はExcel側で設定します（例: Data → Queries & Connections / Refresh All）。",
+    refreshSummary: "Excelで設定",
+    chooseDataset: "Excelテーブルを1つ以上選択してください",
+    save: "保存してExcelを有効化",
+    saving: "有効化中…",
+    api: "Excel API",
+    query: "Power Query (M)",
+    copyQuery: "Power Queryをコピー",
+    download: "Excelファイルをダウンロード",
+    downloading: "ファイル作成中…",
+    downloadFail: "Excelファイルを作成できませんでした",
+    install: "Excel: Data → Get Data → Blank Query → Advanced Editor → Close & Load To…",
+    tableName: "Excelの列",
+    model: "Excel workbook (.xlsx)",
+    historyRange: "履歴期間",
+    historyRangeHelp: "初期値は当月1日から今日までです。日数は自由に変更できます。",
+    monthToDate: "当月1日〜今日",
+    days: "日",
+  },
 } as const;
 
 const SLACK_COPY = {
@@ -199,6 +281,8 @@ const VALIDATION_COPY = {
     connection: "เลือก iXacs Connection",
     scope: "เลือก Production Group อย่างน้อย 1 กลุ่ม",
     fields: "เลือกข้อมูลที่จะส่งอย่างน้อย 1 ฟิลด์",
+    historyDays: "กำหนดช่วงข้อมูลย้อนหลังอย่างน้อย 1 วัน",
+    connectionMissing: "ไม่พบ iXacs Connection ในระบบ — เลือก connection ใหม่",
     destination: "เลือกปลายทางที่จะส่งข้อมูล",
     endpoint: "กรอกข้อมูลการเชื่อมต่อของปลายทาง",
     slackRule: "เพิ่มเงื่อนไข KPI อย่างน้อย 1 เงื่อนไขสำหรับ Slack",
@@ -208,6 +292,8 @@ const VALIDATION_COPY = {
     connection: "Choose an iXacs connection",
     scope: "Choose at least one production group",
     fields: "Choose at least one field to send",
+    historyDays: "Enter at least 1 day of history",
+    connectionMissing: "iXacs connection not found — choose a different connection",
     destination: "Choose a destination",
     endpoint: "Enter the destination connection details",
     slackRule: "Add at least one KPI condition for Slack",
@@ -217,6 +303,8 @@ const VALIDATION_COPY = {
     connection: "iXacs Connectionを選択してください",
     scope: "Production Groupを1つ以上選択してください",
     fields: "送信するフィールドを1つ以上選択してください",
+    historyDays: "履歴期間は1日以上にしてください",
+    connectionMissing: "iXacs Connectionが見つかりません。別の接続を選択してください",
     destination: "出力先を選択してください",
     endpoint: "出力先の接続情報を入力してください",
     slackRule: "Slack用のKPI条件を1つ以上追加してください",
@@ -248,7 +336,12 @@ const INITIAL_DRAFT: DraftForm = {
   alertRules: [],
   powerBiSettings: { ...DEFAULT_POWER_BI_SETTINGS, datasets: [...DEFAULT_POWER_BI_SETTINGS.datasets] },
   powerBiApiKey: "",
-  excelSettings: { ...DEFAULT_EXCEL_SETTINGS, datasets: [...DEFAULT_EXCEL_SETTINGS.datasets], tables: [...DEFAULT_EXCEL_SETTINGS.tables] },
+  excelSettings: {
+    ...DEFAULT_EXCEL_SETTINGS,
+    datasets: [...DEFAULT_EXCEL_SETTINGS.datasets],
+    tables: [...DEFAULT_EXCEL_SETTINGS.tables],
+    historyDays: bangkokDaysFromMonthStart(),
+  },
   excelApiKey: "",
 };
 
@@ -271,6 +364,14 @@ function inferPreset(fields: string[]): DataPreset {
   if (sameFields(fields, FIELD_PRESETS.performance)) return "performance";
   if (sameFields(fields, FIELD_PRESETS.full)) return "full";
   return "custom";
+}
+
+function normalizedPublicUrl(publicUrl: string) {
+  return publicUrl.replace(/\/+$/, "") || "https://sam-bridge.vercel.app";
+}
+
+function isLocalDevHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
 export function ExportWizard({ configId, publicUrl = "https://sam-bridge.vercel.app" }: { configId?: string; publicUrl?: string } = {}) {
@@ -449,10 +550,16 @@ export function ExportWizard({ configId, publicUrl = "https://sam-bridge.vercel.
         ? VALIDATION_COPY[locale].scope
         : null;
   const dataValidation = tabularFlow
-    ? (powerBiFlow ? form.powerBiSettings.datasets.length : form.excelSettings.tables.length) === 0
-      ? powerBiFlow ? POWER_BI_COPY[locale].chooseDataset : EXCEL_COPY[locale].chooseDataset
-      : null
-    : form.fields.length === 0 ? VALIDATION_COPY[locale].fields : null;
+    ? powerBiFlow
+      ? form.powerBiSettings.datasets.length === 0
+        ? POWER_BI_COPY[locale].chooseDataset
+        : null
+      : !Number.isFinite(form.excelSettings.historyDays) || form.excelSettings.historyDays < 1
+        ? VALIDATION_COPY[locale].historyDays
+        : null
+    : form.fields.length === 0
+      ? VALIDATION_COPY[locale].fields
+      : null;
   const destinationValidation = !destinationChosen
     ? VALIDATION_COPY[locale].destination
     : sapFlow && !sapReady
@@ -587,6 +694,16 @@ export function ExportWizard({ configId, publicUrl = "https://sam-bridge.vercel.
       triggerMode: id === "slack" ? "data-change" : id === "power-bi" || id === "excel" ? "manual" : form.triggerMode,
       changesOnly: id === "slack" ? true : form.changesOnly,
       alertRules: id === "power-bi" || id === "excel" ? [] : form.alertRules,
+      ...(id === "excel"
+        ? {
+            excelSettings: {
+              ...DEFAULT_EXCEL_SETTINGS,
+              datasets: [...DEFAULT_EXCEL_SETTINGS.datasets],
+              tables: ["history", "current"],
+              historyDays: bangkokDaysFromMonthStart(),
+            },
+          }
+        : {}),
     });
     if (changed) setEndpointConfigured(false);
     setDestinationChosen(true);
@@ -609,7 +726,8 @@ export function ExportWizard({ configId, publicUrl = "https://sam-bridge.vercel.
   }
 
   async function saveDraft() {
-    if (!form.name.trim() || !form.sourceConnectionId || form.fields.length === 0) {
+    const tabularSave = form.destinationType === "power-bi" || form.destinationType === "excel";
+    if (!form.name.trim() || !form.sourceConnectionId || (!tabularSave && form.fields.length === 0)) {
       setNotice(copy.required);
       return;
     }
@@ -643,7 +761,11 @@ export function ExportWizard({ configId, publicUrl = "https://sam-bridge.vercel.
           ? SLACK_COPY[locale].invalid
           : body.error === "SAP_CONNECTION_REQUIRED"
             ? SAP_COPY[locale].missing
-            : copy.saveError,
+            : body.error === "EXPORTS_CONNECTION_NOT_FOUND"
+              ? VALIDATION_COPY[locale].connectionMissing
+              : body.error?.startsWith("EXPORTS_")
+                ? body.error
+                : copy.saveError,
       );
       setSaving(false);
       return;
@@ -1483,71 +1605,66 @@ function ExcelDataStep({ locale, settings, onChange }: {
   onChange: (settings: ExcelSettings) => void;
 }) {
   const text = EXCEL_COPY[locale];
-  const biText = POWER_BI_COPY[locale];
-  const columns = ["Date", "productionLineName", "product", "planNum", "actualNum", "averageCt", "baseCt", "pcsPerHour", "volumeRate", "operationalAvailability", "operatingTime", "stopTime", "Lost Time รวม"];
-  const toggleTable = (table: ExcelTable) => {
-    const removing = settings.tables.includes(table);
+  const columns = [
+    "Date",
+    "productionLineName",
+    "product",
+    "planNum",
+    "actualNum",
+    "averageCt",
+    "baseCt",
+    "pcsPerHour",
+    "volumeRate",
+    "operationalAvailability",
+    "operatingTime",
+    "stopTime",
+    "Lost Time รวม",
+  ];
+  const setHistoryDays = (raw: string) => {
+    const next = Number(raw);
+    if (!Number.isFinite(next)) return;
     onChange({
       ...settings,
-      tables: removing
-        ? settings.tables.filter((item) => item !== table)
-        : [...settings.tables, table],
-      autoRefresh: table === "current" && removing ? false : settings.autoRefresh,
+      historyDays: Math.min(3660, Math.max(1, Math.round(next))),
     });
   };
   return (
     <section className="ew-step">
       <StepIntro title={text.modelTitle} description={text.modelHelp} />
       <div className="ew-bi-section">
-        <p className="ew-label">1. {text.selectTables}</p>
-        <div className="ew-bi-grid">
-          <label className={`ew-bi-card ${settings.tables.includes("history") ? "is-selected" : ""}`}>
-            <input type="checkbox" checked={settings.tables.includes("history")} onChange={() => toggleTable("history")} />
-            <span><strong>{text.historyTable}</strong><small>{text.historyHelp}</small><code>tblSAMProduction</code></span>
-          </label>
-          <label className={`ew-bi-card ${settings.tables.includes("current") ? "is-selected" : ""}`}>
-            <input type="checkbox" checked={settings.tables.includes("current")} onChange={() => toggleTable("current")} />
-            <span><strong>{text.currentTable}</strong><small>{text.currentHelp}</small><code>tblSAMCurrent</code></span>
-          </label>
-        </div>
-      </div>
-      <div className="ew-bi-section">
         <p className="ew-label">{text.tableName}</p>
         <div className="ew-excel-columns">
-          {columns.map((column, index) => <span key={column}><em>{String.fromCharCode(65 + index)}</em><code>{column}</code></span>)}
+          {columns.map((column) => (
+            <span key={column}>
+              <code>{column}</code>
+            </span>
+          ))}
         </div>
       </div>
-      {settings.tables.includes("history") ? <div className="ew-bi-section">
-        <p className="ew-label">2. {biText.history}</p>
-        <div className="ew-bi-history">
-          {([30, 90, 365] as const).map((days) => (
-            <button key={days} type="button" className={settings.historyDays === days ? "is-selected" : ""} onClick={() => onChange({ ...settings, historyDays: days })}>
-              <strong>{days} {biText.days}</strong>{days === 90 ? <small>{biText.recommended}</small> : null}
-            </button>
-          ))}
-        </div>
-        <p className="ew-muted">{text.historyTable}</p>
-      </div> : null}
       <div className="ew-bi-section">
-        <p className="ew-label">3. {text.refreshTitle}</p>
-        <label className={`ew-bi-card ew-excel-auto ${settings.autoRefresh ? "is-selected" : ""}`}>
-          <input type="checkbox" checked={settings.autoRefresh} onChange={(event) => onChange({
-            ...settings,
-            autoRefresh: event.target.checked,
-            tables: event.target.checked && !settings.tables.includes("current")
-              ? [...settings.tables, "current"]
-              : settings.tables,
-          })} />
-          <span><strong>{text.autoRefresh}</strong><small>{text.currentHelp}</small></span>
-        </label>
-        {settings.autoRefresh ? <div className="ew-bi-history">
-          {([5, 10, 15] as const).map((minutes) => (
-            <button key={minutes} type="button" className={settings.refreshMinutes === minutes ? "is-selected" : ""} onClick={() => onChange({ ...settings, refreshMinutes: minutes })}>
-              <strong>{minutes} {text.minutes}</strong>{minutes === 15 ? <small>{biText.recommended}</small> : null}
+        <label className="ew-field ew-excel-history">
+          <span className="ew-label">{text.historyRange}</span>
+          <div className="ew-excel-history-row">
+            <input
+              className="machine-input"
+              type="number"
+              min={1}
+              max={3660}
+              step={1}
+              value={settings.historyDays}
+              onChange={(event) => setHistoryDays(event.target.value)}
+            />
+            <span className="ew-excel-history-unit">{text.days}</span>
+            <button
+              type="button"
+              className="ew-text-btn"
+              onClick={() => onChange({ ...settings, historyDays: bangkokDaysFromMonthStart() })}
+            >
+              {text.monthToDate}
             </button>
-          ))}
-        </div> : null}
-        <p className="ew-muted">{text.workbookNote}</p>
+          </div>
+          <small className="machine-help">{text.historyRangeHelp}</small>
+        </label>
       </div>
     </section>
   );
@@ -1622,7 +1739,6 @@ function DestinationStep({
   const isExcel = form.destinationType === "excel";
   const isTabular = isPowerBi || isExcel;
   const powerBiCopy = POWER_BI_COPY[locale];
-  const excelCopy = EXCEL_COPY[locale];
   const ChosenIcon = DEST_ICONS[form.destinationType];
   const authLabel =
     authMode === "api-key" ? wizard.authKey : authMode === "bearer" ? wizard.authBearer : wizard.authNone;
@@ -1700,20 +1816,20 @@ function DestinationStep({
               </fieldset>
             ) : null}
             </>
-          ) : isTabular ? (
+          ) : isExcel ? null : isPowerBi ? (
             <fieldset className="ew-block ew-tabular-meta">
-              <legend className="ew-label">{isExcel ? excelCopy.setupTitle : powerBiCopy.setupTitle}</legend>
+              <legend className="ew-label">{powerBiCopy.setupTitle}</legend>
               <div className="ew-tabular-meta-row">
-                <span className="ew-label">{isExcel ? excelCopy.method : powerBiCopy.method}</span>
-                <span>{isExcel ? excelCopy.methodValue : powerBiCopy.methodValue}</span>
+                <span className="ew-label">{powerBiCopy.method}</span>
+                <span>{powerBiCopy.methodValue}</span>
               </div>
               <div className="ew-tabular-meta-row">
-                <span className="ew-label">{isExcel ? excelCopy.refresh : powerBiCopy.refresh}</span>
-                <span>{isExcel ? `${form.excelSettings.refreshMinutes} ${excelCopy.minutes}` : powerBiCopy.refreshValue}</span>
+                <span className="ew-label">{powerBiCopy.refresh}</span>
+                <span>{powerBiCopy.refreshValue}</span>
               </div>
               <div className="ew-tabular-meta-row">
-                <span className="ew-label">{isExcel ? excelCopy.credentials : powerBiCopy.credentials}</span>
-                <span>{isExcel ? excelCopy.credentialsValue : powerBiCopy.credentialsValue}</span>
+                <span className="ew-label">{powerBiCopy.credentials}</span>
+                <span>{powerBiCopy.credentialsValue}</span>
               </div>
             </fieldset>
           ) : (
@@ -1885,8 +2001,14 @@ function ReviewStep({
   onPreview: () => void;
   onSend: () => void;
 }) {
-  const [excelBusy, setExcelBusy] = useState(false);
-  const [excelNotice, setExcelNotice] = useState<string | null>(null);
+  const [baseUrl, setBaseUrl] = useState(() => normalizedPublicUrl(publicUrl));
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isLocalDevHost(window.location.hostname)) {
+      setBaseUrl(window.location.origin.replace(/\/+$/, ""));
+    }
+  }, [publicUrl]);
+
   const isSap = form.destinationType === "sap-odata";
   const isPowerBi = form.destinationType === "power-bi";
   const isExcel = form.destinationType === "excel";
@@ -1894,37 +2016,7 @@ function ReviewStep({
   const powerBiCopy = POWER_BI_COPY[locale];
   const excelCopy = EXCEL_COPY[locale];
   const powerBiPath = configId ? `/api/power-bi/exports/${configId}` : "";
-  const excelPath = configId ? `/api/excel/exports/${configId}` : "";
-  const baseUrl = publicUrl.replace(/\/+$/, "") || "https://sam-bridge.vercel.app";
 
-  async function downloadExcelFile() {
-    if (!configId) return;
-    setExcelBusy(true);
-    setExcelNotice(null);
-    try {
-      const response = await fetch(`/api/exports/${configId}/excel`);
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error || "EXCEL_EXPORT_FAILED");
-      }
-      const blob = await response.blob();
-      const disposition = response.headers.get("content-disposition") ?? "";
-      const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(disposition);
-      const filename = decodeURIComponent(match?.[1] || match?.[2] || `${form.name || "SAM-export"}.xlsx`);
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = filename;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      setExcelNotice(excelCopy.downloadFail);
-    } finally {
-      setExcelBusy(false);
-    }
-  }
   const powerQuery = configId ? `let
   BaseUrl = "${baseUrl}",
   ApiPath = "api/power-bi/exports/${configId}",
@@ -1950,57 +2042,35 @@ function ReviewStep({
   Data = Table.FromRecords(Rows)
 in
   Data` : "";
-  const excelCurrentQuery = configId ? `let
-  BaseUrl = "${baseUrl}",
-  RefreshToken = DateTimeZone.ToText(DateTimeZone.FixedUtcNow(), "yyyyMMddHHmmssfff"),
-  Source = Json.Document(Web.Contents(BaseUrl, [
-    RelativePath = "api/excel/exports/${configId}",
-    Query = [table = "current", refresh = RefreshToken],
-    Headers = [Authorization = "Bearer ${form.excelApiKey}"],
-    IsRetry = true,
-    Timeout = #duration(0, 0, 10, 0)
-  ])),
-  Data = Table.FromRecords(Source[value], null, MissingField.UseNull)
-in
-  Data` : "";
-  const excelVba = `Option Explicit
-
-Public SAMNextRefresh As Date
-
-Public Sub StartSAMAutoRefresh()
-    RefreshSAMData
-End Sub
-
-Public Sub RefreshSAMData()
-    ThisWorkbook.RefreshAll
-    SAMNextRefresh = Now + TimeSerial(0, ${form.excelSettings.refreshMinutes}, 0)
-    Application.OnTime SAMNextRefresh, "RefreshSAMData"
-End Sub
-
-Public Sub StopSAMAutoRefresh()
-    On Error Resume Next
-    Application.OnTime SAMNextRefresh, "RefreshSAMData", , False
-End Sub`;
-  const excelQuery = configId ? `let
+  const excelQuery = configId && form.excelApiKey ? `let
   BaseUrl = "${baseUrl}",
   ApiPath = "api/excel/exports/${configId}",
   ApiKey = "${form.excelApiKey}",
-  TableName = "production",
-  HistoryDays = ${form.excelSettings.historyDays},
-  EndDate = Date.From(DateTimeZone.SwitchZone(DateTimeZone.FixedUtcNow(), 7)),
-  StartDate = Date.AddDays(EndDate, 1 - HistoryDays),
+  Meta = Json.Document(Web.Contents(BaseUrl, [
+    RelativePath = ApiPath,
+    Headers = [Authorization = "Bearer " & ApiKey],
+    Timeout = #duration(0, 0, 45, 0),
+    IsRetry = true
+  ])),
+  StartDate = Date.FromText(Meta[defaultDateFrom]),
+  EndDate = Date.FromText(Meta[defaultDateTo]),
   Windows = List.Generate(
     () => [From = StartDate],
     each [From] <= EndDate,
-    each [From = Date.AddDays([From], 1)],
-    each [From = [From], To = [From]]
+    each [From = Date.AddDays([From], 7)],
+    each [From = [From], To = List.Min({Date.AddDays([From], 6), EndDate})]
   ),
   GetWindow = (Window as record) =>
     Json.Document(Web.Contents(BaseUrl, [
       RelativePath = ApiPath,
-      Query = [table = TableName, #"from" = Date.ToText(Window[From], "yyyy-MM-dd"), to = Date.ToText(Window[To], "yyyy-MM-dd")],
+      Query = [
+        table = "production",
+        #"from" = Date.ToText(Window[From], "yyyy-MM-dd"),
+        to = Date.ToText(Window[To], "yyyy-MM-dd")
+      ],
       Headers = [Authorization = "Bearer " & ApiKey],
-      Timeout = #duration(0, 0, 10, 0)
+      Timeout = #duration(0, 1, 0, 0),
+      IsRetry = true
     ]))[value],
   Rows = List.Combine(List.Transform(Windows, each GetWindow(_))),
   Data = Table.FromRecords(Rows, null, MissingField.UseNull)
@@ -2034,13 +2104,15 @@ in
       <StepIntro title={wizard.reviewHeading} />
       <div className="ew-review-title">
         <h3>{form.name.trim() || wizard.untitled}</h3>
-        <span className="ew-draft-status">
-          {form.destinationType === "slack"
-            ? slackCopy.ready
-            : isSap
-              ? sapCopy.simulationBadge
-              : copy.draft}
-        </span>
+        {!isExcel ? (
+          <span className="ew-draft-status">
+            {form.destinationType === "slack"
+              ? slackCopy.ready
+              : isSap
+                ? sapCopy.simulationBadge
+                : copy.draft}
+          </span>
+        ) : null}
       </div>
       {form.description.trim() ? <p className="ew-review-desc">{form.description}</p> : null}
 
@@ -2186,36 +2258,51 @@ in
             )}
           </dd>
         </div>
-        <div>
-          <dt>{wizard.stepData}</dt>
-          <dd>
-            {isTabular
-              ? isExcel ? form.excelSettings.tables.map((table) => table === "history" ? "tblSAMProduction" : "tblSAMCurrent").join(" · ") : form.powerBiSettings.datasets.map((item) => item === "production" ? "FactProduction" : "FactLostTime").join(" · ")
-              : `${presetLabel} · ${form.fields.length} ${copy.fields}`}
-          </dd>
-        </div>
+        {!isExcel ? (
+          <div>
+            <dt>{wizard.stepData}</dt>
+            <dd>
+              {isTabular
+                ? form.powerBiSettings.datasets.map((item) => item === "production" ? "FactProduction" : "FactLostTime").join(" · ")
+                : `${presetLabel} · ${form.fields.length} ${copy.fields}`}
+            </dd>
+          </div>
+        ) : null}
         <div>
           <dt>{copy.destination}</dt>
           <dd>{destinationMeta.name}</dd>
         </div>
-        <div>
-          <dt>{copy.format}</dt>
-          <dd>{isPowerBi ? powerBiCopy.model : isExcel ? excelCopy.model : form.destinationType === "slack" ? slackCopy.layout : form.format}</dd>
-        </div>
-        <div>
-          <dt>{copy.trigger}</dt>
-          <dd>{isPowerBi ? powerBiCopy.refreshValue : isExcel ? form.excelSettings.autoRefresh ? `AutoRefresh · ${form.excelSettings.refreshMinutes} ${excelCopy.minutes}` : copy.manual : copy.manual}</dd>
-        </div>
+        {!isExcel ? (
+          <>
+            <div>
+              <dt>{copy.format}</dt>
+              <dd>{isPowerBi ? powerBiCopy.model : form.destinationType === "slack" ? slackCopy.layout : form.format}</dd>
+            </div>
+            <div>
+              <dt>{copy.trigger}</dt>
+              <dd>{isPowerBi ? powerBiCopy.refreshValue : copy.manual}</dd>
+            </div>
+          </>
+        ) : null}
         {isPowerBi ? <div><dt>{powerBiCopy.history}</dt><dd>{form.powerBiSettings.historyDays} {powerBiCopy.days}</dd></div> : null}
-        {isExcel && form.excelSettings.tables.includes("history") ? <div><dt>{powerBiCopy.history}</dt><dd>{form.excelSettings.historyDays} {powerBiCopy.days} · {excelCopy.historyTable}</dd></div> : null}
+        {isExcel ? (
+          <div>
+            <dt>{excelCopy.historyRange}</dt>
+            <dd>
+              {form.excelSettings.historyDays} {excelCopy.days}
+            </dd>
+          </div>
+        ) : null}
       </dl>
-      <div className="ew-flow" aria-hidden="true">
-        <span>iXacs</span>
-        <i />
-        <span className="is-bridge">SAM Bridge</span>
-        <i />
-        <span>{destinationMeta.name}</span>
-      </div>
+      {!isExcel ? (
+        <div className="ew-flow" aria-hidden="true">
+          <span>iXacs</span>
+          <i />
+          <span className="is-bridge">SAM Bridge</span>
+          <i />
+          <span>{destinationMeta.name}</span>
+        </div>
+      ) : null}
       {isPowerBi && configId ? (
         <section className="ew-bi-connect">
           <div><p className="ew-label">Power BI API</p><code>{powerBiPath}</code></div>
@@ -2228,31 +2315,44 @@ in
           <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(powerQuery)}>คัดลอก Power Query</button>
         </section>
       ) : null}
-      {isExcel && configId ? (
+      {isExcel && excelQuery ? (
         <section className="ew-bi-connect">
-          <div className="ew-bar-actions">
-            <button type="button" className="btn btn-primary" disabled={excelBusy} onClick={() => void downloadExcelFile()}>
-              {excelBusy ? excelCopy.downloading : excelCopy.download}
-            </button>
-          </div>
-          {excelNotice ? <p className="ew-muted">{excelNotice}</p> : null}
-          <div><p className="ew-label">{excelCopy.api}</p><code>{excelPath}</code></div>
-          <div><p className="ew-label">Bearer API key</p><code>{form.excelApiKey}</code></div>
-          <div><p className="ew-label">{excelCopy.tableName}</p><code>{form.excelSettings.tables.map((table) => table === "history" ? "tblSAMProduction" : "tblSAMCurrent").join(" · ")}</code></div>
-          {form.excelSettings.tables.includes("history") ? <div><p className="ew-label">{excelCopy.query} · tblSAMProduction</p><pre>{excelQuery}</pre></div> : null}
-          {form.excelSettings.tables.includes("current") ? <div><p className="ew-label">{excelCopy.query} · tblSAMCurrent</p><pre>{excelCurrentQuery}</pre></div> : null}
-          <p className="ew-muted">{excelCopy.install}</p>
-          {form.excelSettings.autoRefresh ? <p className="ew-muted">สำหรับ .xlsm ให้วาง VBA ใน Standard Module แล้วเรียก StartSAMAutoRefresh หนึ่งครั้ง ระบบจะ RefreshAll ทุก {form.excelSettings.refreshMinutes} นาทีขณะเปิด Excel และดึง tblSAMCurrent ใหม่เหมือนหน้า Realtime</p> : null}
-          <div className="ew-bar-actions">
-            {form.excelSettings.tables.includes("history") ? <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(excelQuery)}>{excelCopy.copyQuery} · History</button> : null}
-            {form.excelSettings.tables.includes("current") ? <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(excelCurrentQuery)}>{excelCopy.copyQuery} · Current</button> : null}
-            {form.excelSettings.autoRefresh ? <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(excelVba)}>{excelCopy.copyVba}</button> : null}
-          </div>
+          <QueryCopyBlock code={excelQuery} copyLabel={excelCopy.copyQuery} />
         </section>
       ) : null}
         </>
       )}
     </section>
+  );
+}
+
+function QueryCopyBlock({
+  code,
+  copyLabel,
+}: {
+  code: string;
+  copyLabel: string;
+}) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="ew-query-copy">
+      <pre className="ew-query-pre">
+        <button
+          type="button"
+          className="ew-query-copy-btn"
+          aria-label={copyLabel}
+          onClick={() => {
+            void navigator.clipboard.writeText(code).then(() => {
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1500);
+            });
+          }}
+        >
+          {copied ? <FiCheck size={16} /> : <FiCopy size={16} />}
+        </button>
+        {code}
+      </pre>
+    </div>
   );
 }
 

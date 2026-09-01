@@ -282,6 +282,8 @@ function IntegrationCard({
   view,
   onHover,
   onPlay,
+  offset = { x: 0, y: 0 },
+  onPointerDown,
 }: {
   id: FlowSourceId | FlowDestId | "ixacs";
   title: string;
@@ -290,6 +292,8 @@ function IntegrationCard({
   view: View;
   onHover: (next: Hover, fromPointer?: boolean) => void;
   onPlay?: (id: DemoSourceId) => void;
+  offset?: Point;
+  onPointerDown?: (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => void;
 }) {
   const Icon = id === "ixacs"
     ? null
@@ -317,6 +321,14 @@ function IntegrationCard({
             }
           : undefined
       }
+      onMouseDown={onPointerDown}
+      onTouchStart={onPointerDown}
+      style={{
+        transform: `translate(${offset.x}px, ${offset.y}px)`,
+        cursor: offset.x || offset.y ? "grabbing" : "grab",
+        userSelect: "none",
+        touchAction: "none",
+      }}
       role={onPlay && isInbound(id) ? "button" : undefined}
       tabIndex={0}
     >
@@ -339,11 +351,15 @@ function SAMBridgeNode({
   hover,
   view,
   onHover,
+  offset = { x: 0, y: 0 },
+  onPointerDown,
 }: {
   copy: FlowCopy;
   hover: Hover;
   view: View;
   onHover: (next: Hover, fromPointer?: boolean) => void;
+  offset?: Point;
+  onPointerDown?: (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => void;
 }) {
   const processing = view.stage === "processed";
   const ready = view.stage === "exporting" || view.stage === "complete";
@@ -357,6 +373,14 @@ function SAMBridgeNode({
       onMouseLeave={() => onHover(null, true)}
       onFocus={() => onHover("bridge")}
       onBlur={() => onHover(null)}
+      onMouseDown={onPointerDown}
+      onTouchStart={onPointerDown}
+      style={{
+        transform: `translate(${offset.x}px, ${offset.y}px)`,
+        cursor: offset.x || offset.y ? "grabbing" : "grab",
+        userSelect: "none",
+        touchAction: "none",
+      }}
       tabIndex={0}
     >
       <Port name="bridge-ai" side="top" live={portLive("bridge-ai", hover, view)} />
@@ -384,6 +408,8 @@ function AIChip({
   view,
   onHover,
   index,
+  offset = { x: 0, y: 0 },
+  onPointerDown,
 }: {
   id: FlowProviderId;
   name: string;
@@ -392,13 +418,23 @@ function AIChip({
   view: View;
   onHover: (next: Hover, fromPointer?: boolean) => void;
   index: number;
+  offset?: Point;
+  onPointerDown?: (e: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => void;
 }) {
   const thinking = view.stage === "processing";
   return (
     <button
       type="button"
       className={`flow-ai-chip is-${id} ${nodeTone(id, hover, view)} ${thinking ? "is-thinking" : ""}`}
-      style={{ "--flow-ai-index": index } as CSSProperties}
+      onMouseDown={onPointerDown}
+      onTouchStart={onPointerDown}
+      style={{
+        "--flow-ai-index": index,
+        transform: `translate(${offset.x}px, ${offset.y}px)`,
+        cursor: offset.x || offset.y ? "grabbing" : "grab",
+        userSelect: "none",
+        touchAction: "none",
+      } as CSSProperties}
       title={name}
       aria-label={name}
       data-node={id}
@@ -412,6 +448,27 @@ function AIChip({
     </button>
   );
 }
+const DEFAULT_DESKTOP_OFFSETS: Record<string, Point> = {
+  ixacs: { x: -12, y: -4 },
+  webhook: { x: -2, y: -2 },
+  "file-upload": { x: -15, y: 0 },
+  database: { x: 2, y: 2 },
+  mqtt: { x: -10, y: 4 },
+  bridge: { x: 0, y: 0 },
+  claude: { x: -10, y: -3 },
+  openai: { x: 0, y: -8 },
+  gemini: { x: 10, y: -3 },
+  huggingface: { x: -5, y: 4 },
+  openrouter: { x: 5, y: 4 },
+  "sap-odata": { x: 12, y: -6 },
+  "power-bi": { x: 0, y: -3 },
+  excel: { x: 15, y: -1 },
+  powerpoint: { x: -2, y: 0 },
+  line: { x: 10, y: 1 },
+  "line-works": { x: -3, y: 3 },
+  slack: { x: 12, y: 5 },
+  teams: { x: 2, y: 8 },
+};
 
 export function IntegrationFlowGraph({ copy }: { copy: FlowCopy }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -424,6 +481,27 @@ export function IntegrationFlowGraph({ copy }: { copy: FlowCopy }) {
     hovering: pointer,
     motion,
   });
+
+  const [isMobile, setIsMobile] = useState(false);
+  // State for N8N-like draggable node offsets
+  const [offsets, setOffsets] = useState<Record<string, Point>>({});
+  const activeDragRef = useRef<{ id: string; startX: number; startY: number; initX: number; initY: number } | null>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 980px)");
+    setIsMobile(media.matches);
+    const listener = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      setOffsets({});
+    } else {
+      setOffsets(DEFAULT_DESKTOP_OFFSETS);
+    }
+  }, [isMobile]);
 
   const setNodeHover = useCallback((next: Hover, fromPointer = false) => {
     setHover(next);
@@ -469,6 +547,68 @@ export function IntegrationFlowGraph({ copy }: { copy: FlowCopy }) {
     setLinks(next);
   }, [copy.sources, copy.dests]);
 
+  const startDrag = useCallback((id: string, clientX: number, clientY: number) => {
+    const currentOffset = offsets[id] || { x: 0, y: 0 };
+    activeDragRef.current = {
+      id,
+      startX: clientX,
+      startY: clientY,
+      initX: currentOffset.x,
+      initY: currentOffset.y,
+    };
+  }, [offsets]);
+
+  const handlePointerDown = useCallback((id: string) => (e: React.MouseEvent | React.TouchEvent) => {
+    if ("button" in e && e.button !== 0) return;
+
+    const target = e.target as HTMLElement;
+    if (target.closest("button") && !target.closest(".flow-ai-chip")) {
+      return;
+    }
+
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+
+    startDrag(id, clientX, clientY);
+  }, [startDrag]);
+
+  useEffect(() => {
+    const handlePointerMove = (e: MouseEvent | TouchEvent) => {
+      if (!activeDragRef.current) return;
+      const { id, startX, startY, initX, initY } = activeDragRef.current;
+
+      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+      const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+
+      const dx = clientX - startX;
+      const dy = clientY - startY;
+
+      setOffsets((prev) => ({
+        ...prev,
+        [id]: {
+          x: initX + dx,
+          y: initY + dy,
+        },
+      }));
+    };
+
+    const handlePointerUp = () => {
+      activeDragRef.current = null;
+    };
+
+    window.addEventListener("mousemove", handlePointerMove, { passive: true });
+    window.addEventListener("mouseup", handlePointerUp);
+    window.addEventListener("touchmove", handlePointerMove, { passive: true });
+    window.addEventListener("touchend", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handlePointerMove);
+      window.removeEventListener("mouseup", handlePointerUp);
+      window.removeEventListener("touchmove", handlePointerMove);
+      window.removeEventListener("touchend", handlePointerUp);
+    };
+  }, []);
+
   useEffect(() => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
     setMotion(!reduce.matches);
@@ -494,7 +634,7 @@ export function IntegrationFlowGraph({ copy }: { copy: FlowCopy }) {
 
   useEffect(() => {
     layout();
-  }, [layout, view.stage, view.sources, view.dests]);
+  }, [layout, view.stage, view.sources, view.dests, offsets]);
 
   const inboundLinks = links.filter((link) => view.sources.some((source) => link.id === `${source}-bridge`));
   const outboundLinks = links.filter((link) => view.dests.some((dest) => link.id === `bridge-${dest}`));
@@ -535,6 +675,8 @@ export function IntegrationFlowGraph({ copy }: { copy: FlowCopy }) {
             view={view}
             onHover={setNodeHover}
             onPlay={play}
+            offset={offsets["ixacs"] || { x: 0, y: 0 }}
+            onPointerDown={handlePointerDown("ixacs")}
           />
           {copy.sources.map((item) => (
             <IntegrationCard
@@ -546,6 +688,8 @@ export function IntegrationFlowGraph({ copy }: { copy: FlowCopy }) {
               view={view}
               onHover={setNodeHover}
               onPlay={play}
+              offset={offsets[item.id] || { x: 0, y: 0 }}
+              onPointerDown={handlePointerDown(item.id)}
             />
           ))}
         </div>
@@ -563,11 +707,20 @@ export function IntegrationFlowGraph({ copy }: { copy: FlowCopy }) {
                 view={view}
                 onHover={setNodeHover}
                 index={index}
+                offset={offsets[provider.id] || { x: 0, y: 0 }}
+                onPointerDown={handlePointerDown(provider.id)}
               />
             ))}
             </div>
           </div>
-          <SAMBridgeNode copy={copy} hover={hover} view={view} onHover={setNodeHover} />
+          <SAMBridgeNode
+            copy={copy}
+            hover={hover}
+            view={view}
+            onHover={setNodeHover}
+            offset={offsets["bridge"] || { x: 0, y: 0 }}
+            onPointerDown={handlePointerDown("bridge")}
+          />
         </div>
 
         <div className="flow-col is-dests">
@@ -580,6 +733,8 @@ export function IntegrationFlowGraph({ copy }: { copy: FlowCopy }) {
               hover={hover}
               view={view}
               onHover={setNodeHover}
+              offset={offsets[dest.id] || { x: 0, y: 0 }}
+              onPointerDown={handlePointerDown(dest.id)}
             />
           ))}
         </div>

@@ -47,7 +47,7 @@ export function SystemUsers({ machineId }: { machineId: string }) {
   return (
     <SystemShell
       machineId={machineId}
-      title={machine?.name || copy.usersOf}
+      title={machine?.name ?? ""}
       meta={machine?.companyLabel}
       copy={copy}
       active="users"
@@ -55,18 +55,22 @@ export function SystemUsers({ machineId }: { machineId: string }) {
       onRefresh={() => void load()}
     >
       <div className="as-tools">
-        <input
-          className="pac-search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={copy.searchUsers}
-          aria-label={copy.searchUsers}
-        />
+        {loading && !machine ? (
+          <span className="skeleton as-tools-skel" aria-hidden />
+        ) : (
+          <input
+            className="pac-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={copy.searchUsers}
+            aria-label={copy.searchUsers}
+          />
+        )}
       </div>
       {error ? <p className="inline-error">{error}</p> : null}
-      {loading ? (
+      {loading && !machine ? (
         <div className="as-data-wrap" aria-busy="true">
-          <div className="as-data">
+          <div className="as-data as-data-users">
             <div className="as-data-row as-data-head">
               <span>{copy.colName}</span>
               <span>{copy.ixacsId}</span>
@@ -75,7 +79,7 @@ export function SystemUsers({ machineId }: { machineId: string }) {
               <span>{copy.colOnline}</span>
               <span>{copy.colLast}</span>
             </div>
-            {[0, 1, 2].map((row) => (
+            {[0, 1, 2, 3].map((row) => (
               <div key={row} className="as-data-row">
                 <span className="skeleton skeleton-key" />
                 <span className="skeleton skeleton-assign" />

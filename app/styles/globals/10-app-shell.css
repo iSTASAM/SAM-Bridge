@@ -104,9 +104,14 @@
 :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-brand-wrap,
 :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-brand,
 :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-label,
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-section-title,
 :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-user-copy,
 :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-sidebar-version {
   display: none;
+}
+
+:is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-group + .app-nav-group {
+  margin-top: 4px;
 }
 
 :is(.app-shell.is-sidebar-hidden, html[data-sidebar-hidden="1"] .app-shell) .app-nav-item {
@@ -168,6 +173,39 @@
   outline-offset: 2px;
 }
 
+.app-docs-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-family: var(--font-prompt), sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.app-docs-link:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.app-docs-link.is-active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.app-docs-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .lang-picker .menu,
 .theme-picker .menu {
   top: calc(100% + 4px);
@@ -210,10 +248,30 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   min-height: 0;
   overflow: auto;
-  padding: 0 2px;
+  padding: 0 4px;
+}
+
+.app-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-nav-group + .app-nav-group {
+  margin-top: 20px;
+}
+
+.app-nav-section-title {
+  padding: 6px 10px 6px;
+  color: var(--text-primary);
+  font-family: var(--font-prompt), var(--font-jp), sans-serif;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
 
 .app-nav-item {
@@ -221,20 +279,26 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 7px 10px;
   color: var(--text-secondary);
   background: transparent;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   text-align: left;
   text-decoration: none;
-  font-family: var(--font-prompt), sans-serif;
-  font-size: 16px;
-  line-height: 1.3;
+  font-family: var(--font-prompt), var(--font-jp), sans-serif;
+  font-size: 14px;
+  line-height: 1.35;
   cursor: pointer;
   transition:
     background-color 140ms ease,
     color 140ms ease;
+}
+
+.app-nav-icon {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: color 140ms ease;
 }
 
 .app-nav-item:hover {
@@ -242,10 +306,38 @@
   background: var(--bg-hover);
 }
 
+.app-nav-item:hover .app-nav-icon,
+.app-nav-item.is-active .app-nav-icon {
+  color: var(--text-primary);
+}
+
 .app-nav-item.is-active {
   color: var(--text-primary);
-  background: var(--bg-active);
+  background: var(--bg-hover);
+  font-weight: 550;
+}
+
+/* Home pill card styling like OpenAI Docs */
+.app-nav-item.is-home {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
   font-weight: 500;
+  padding: 9px 12px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
+.app-nav-item.is-home .app-nav-icon {
+  color: var(--text-primary);
+}
+
+.app-nav-item.is-home:hover {
+  background: var(--bg-hover);
+}
+
+.app-nav-item.is-home.is-active {
+  background: var(--bg-active);
+  font-weight: 600;
 }
 
 .app-nav-item:focus-visible,
@@ -275,8 +367,10 @@
 .app-sidebar-user-avatar {
   flex-shrink: 0;
   width: 36px;
-  height: 34px;
-  object-fit: contain;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-subtle);
 }
 
 .app-sidebar-user-copy {

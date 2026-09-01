@@ -188,6 +188,40 @@ export async function verifyAdminAccount(username: string, password: string) {
   return item;
 }
 
+/** Creates or updates an app-managed password, including for the env admin username. */
+export async function upsertAdminAccountPassword(username: string, password: string) {
+  await ensureHydrated();
+  const name = normalizeUsername(username);
+  if (!name) throw new Error("ADMIN_USERNAME_REQUIRED");
+  if (password.length < 8) throw new Error("ADMIN_PASSWORD_SHORT");
+  const existing = findByUsername(name);
+  if (existing) {
+    const updated = await updateAdminAccount(existing.id, { password });
+    if (!updated) throw new Error("ADMIN_ACCOUNTS_SAVE_FAILED");
+    const item = store.get(existing.id);
+    if (!item) throw new Error("ADMIN_ACCOUNTS_SAVE_FAILED");
+    return item;
+  }
+  const now = new Date().toISOString();
+  const next = normalize({
+    id: randomUUID(),
+    username: name,
+    passwordHash: hashAdminPassword(password),
+    createdAt: now,
+    updatedAt: now,
+  });
+  store.set(next.id, next);
+  if (supabaseConfigured()) {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
+    const { error } = await supabase.from("admin_accounts").insert(accountToRow(next));
+    if (error) throw new Error(`ADMIN_ACCOUNTS_SAVE_FAILED: ${error.message}`);
+  } else {
+    persistFile();
+  }
+  return next;
+}
+
 export async function createAdminAccount(username: string, password: string) {
   await ensureHydrated();
   const name = normalizeUsername(username);

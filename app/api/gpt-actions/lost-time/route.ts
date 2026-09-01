@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { POST as readLostTime } from "@/app/api/connections/[id]/lost-time/route";
-import { authenticateGptAction, isGptCompanyAllowed } from "@/lib/gpt-actions";
+import { authenticateGptAction, isGptCompanyAllowed, parseGptCompanyKey } from "@/lib/gpt-actions";
 import { getConnection } from "@/lib/ixacs-connections";
 import { periodWarnings, resolveGptActionPeriod, type GptActionPeriod } from "@/lib/gpt-action-period";
 
@@ -150,12 +150,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Invalid or missing API key" }, { status: 401 });
   }
   const url = new URL(request.url);
-  const companyId = url.searchParams.get("companyId")?.trim() ?? "";
-  const company = companyId ? await getConnection(companyId) : null;
+  const rawCompanyId = url.searchParams.get("companyId")?.trim() ?? "";
+  const { connectionId, customerId } = parseGptCompanyKey(rawCompanyId);
+  const company = connectionId ? await getConnection(connectionId) : null;
   if (!company) {
     return NextResponse.json({ error: "Company not found" }, { status: 404 });
   }
-  if (!isGptCompanyAllowed(companyId)) {
+  if (!isGptCompanyAllowed(connectionId, customerId)) {
     return NextResponse.json({ error: "This API key cannot access the requested company" }, { status: 403 });
   }
   const lineId = url.searchParams.get("lineId")?.trim() ?? "";
@@ -165,12 +166,20 @@ export async function GET(request: Request) {
   const internal = new Request(request.url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(periodResult.body),
+    body: JSON.stringify({
+      ...periodResult.body,
+      ...(customerId ? { customerIds: [customerId] } : {}),
+    }),
   });
-  const response = await readLostTime(internal, { params: Promise.resolve({ id: companyId }) });
+  const response = await readLostTime(internal, { params: Promise.resolve({ id: connectionId }) });
   if (!response.ok) return response;
   const payload = await response.json() as Record<string, unknown>;
-  const compact = compactLostTime(payload, periodResult.period, company, { lineId, lineName });
+  const customer = customerId ? company.customers?.find((item) => item.id === customerId) : undefined;
+  const companyView = {
+    id: rawCompanyId || connectionId,
+    name: customer?.name || customerId || company.name,
+  };
+  const compact = compactLostTime(payload, periodResult.period, companyView, { lineId, lineName });
   if ((lineId || lineName) && compact.matchedLineCount === 0) {
     const availableLines = (Array.isArray(payload.rows) ? payload.rows : [])
       .filter((row): row is LostTimeRow => Boolean(row) && typeof row === "object" && !Array.isArray(row))

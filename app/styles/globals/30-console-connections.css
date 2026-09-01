@@ -207,74 +207,190 @@
   }
 }
 
+.machine-page {
+  max-width: 960px;
+}
+
 .machine-page-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
+  gap: 24px;
+  padding-bottom: 38px;
+  border-bottom: 1px solid var(--border);
 }
 
-.machine-intro {
-  max-width: 36rem;
-  margin: 14px 0 0;
-  font-size: 15px;
-  line-height: 1.6;
-  white-space: pre-line;
-  color: var(--text-secondary);
-}
-
-.machine-list-section {
-  margin-top: 48px;
-}
-
-.machine-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.machine-card {
+.machine-table-wrap {
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px 24px;
-  padding: 20px 22px;
-  overflow: visible;
-  background: var(--bg-elevated);
+  margin-top: 28px;
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
+  background: var(--bg-elevated);
 }
 
-.machine-card .menu {
-  z-index: 30;
+.machine-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
 }
 
-.machine-card-title {
-  margin: 0;
-  font-size: 16px;
+.machine-table th,
+.machine-table td {
+  padding: 14px 16px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+
+.machine-table th {
+  color: var(--text-tertiary);
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: var(--bg-subtle);
+  white-space: nowrap;
 }
 
-.machine-card-url {
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+.machine-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.machine-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.machine-table-name {
+  font-size: 14px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+}
+
+.machine-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-subtle);
   color: var(--text-secondary);
 }
 
-.machine-card-meta {
+.machine-pill.is-ok {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+
+.machine-pill.is-error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.machine-table-actions-col,
+.machine-table-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.machine-table-actions {
+  position: relative;
+}
+
+.machine-table-actions-inner {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 10px 16px;
-  margin-top: 14px;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.menu.machine-row-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: auto;
+  z-index: 100;
+  min-width: 200px;
+  max-width: min(240px, calc(100vw - 16px));
+}
+
+.machine-table tbody tr.is-open {
+  background: var(--bg-hover);
+}
+
+.machine-table tbody tr.is-open td {
+  position: relative;
+  z-index: 1;
+}
+
+.machine-empty {
+  margin-top: 28px;
+  padding: 48px 24px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+
+.machine-empty h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 550;
+  letter-spacing: -0.02em;
+}
+
+.machine-empty p {
+  max-width: 420px;
+  margin: 10px auto 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.machine-empty .btn {
+  margin-top: 22px;
+}
+
+.machine-callout {
+  margin-top: 24px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.machine-callout strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.machine-callout p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.machine-callout.is-ok {
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+  background: color-mix(in srgb, var(--success) 6%, var(--bg-subtle));
+}
+
+.machine-callout.is-ok strong {
+  color: var(--success);
+}
+
+.machine-callout.is-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 6%, var(--bg-subtle));
+}
+
+.machine-callout.is-error strong {
+  color: var(--danger);
 }
 
 .machine-status {
@@ -311,45 +427,6 @@
 
 .machine-status.is-error .machine-status-dot {
   background: var(--danger);
-}
-
-.machine-card-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.machine-feedback {
-  margin-top: 20px;
-  padding: 12px 0 0;
-}
-
-.machine-feedback-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.machine-feedback-body {
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text-secondary);
-}
-
-.machine-feedback.is-ok .machine-feedback-title {
-  color: var(--success);
-}
-
-.machine-feedback.is-error .machine-feedback-title {
-  color: var(--danger);
-}
-
-.machine-mono {
-  font-family: var(--font-mono);
 }
 
 .menu-link {

@@ -90,7 +90,7 @@ function LandingNav({ copy }: { copy: LandingCopy }) {
           {copy.brand}
         </Link>
         <div className="lp-nav-actions">
-          <AppToolbar />
+          <AppToolbar showDocs={authenticated} />
           {authenticated ? (
             <button
               type="button"

@@ -1,9 +1,11 @@
 export const COPY = {
   th: {
     title: "iXacs",
-    intro: "จัดการเครื่องและการเชื่อมต่อ iXacs\nสำหรับรับข้อมูลจากไลน์ผลิตเข้าสู่ SAM Bridge",
     add: "เพิ่มเครื่อง",
     listTitle: "เครื่องที่เชื่อมต่อ",
+    colMachine: "เครื่อง",
+    colStatus: "สถานะ",
+    colActions: "การดำเนินการ",
     emptyTitle: "ยังไม่มีเครื่อง iXacs",
     emptyBody: "เพิ่มเครื่อง iXacs เพื่อเริ่มรับข้อมูลจากไลน์ผลิตเข้าสู่ SAM Bridge.",
     save: "บันทึกเครื่อง",
@@ -92,9 +94,11 @@ export const COPY = {
   },
   en: {
     title: "iXacs",
-    intro: "Manage iXacs connections used to bring production data into SAM Bridge.",
     add: "Add machine",
     listTitle: "Connected machines",
+    colMachine: "Machine",
+    colStatus: "Status",
+    colActions: "Actions",
     emptyTitle: "No iXacs machines yet",
     emptyBody: "Add an iXacs machine to start receiving production-line data into SAM Bridge.",
     save: "Save machine",
@@ -183,9 +187,11 @@ export const COPY = {
   },
   ja: {
     title: "iXacs",
-    intro: "生産データを SAM Bridge に取り込むための iXacs 接続を管理します。",
     add: "マシンを追加",
     listTitle: "接続中のマシン",
+    colMachine: "マシン",
+    colStatus: "状態",
+    colActions: "操作",
     emptyTitle: "iXacsマシンはまだありません",
     emptyBody: "iXacsマシンを追加して、生産ラインのデータを SAM Bridge へ取り込みます。",
     save: "マシンを保存",

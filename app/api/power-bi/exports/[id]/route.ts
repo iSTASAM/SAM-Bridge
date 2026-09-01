@@ -45,7 +45,7 @@ if (exportShared.__ixacsLostTimeWarmVersion !== 2) {
   lostTimeWarmRunning.clear();
   exportShared.__ixacsLostTimeWarmVersion = 2;
 }
-const EXCEL_HISTORY_CONCURRENCY = 4;
+const EXCEL_HISTORY_CONCURRENCY = 8;
 const EXCEL_DAILY_CACHE_FILE = path.join(process.cwd(), "data", "ixacs-excel-production-cache.json");
 
 function hydrateExcelDailyCache() {
@@ -426,11 +426,18 @@ export async function serveTabularExport(request: Request, id: string, destinati
   const url = new URL(request.url);
   const table = url.searchParams.get("table");
   const excelCurrent = destination === "excel" && table === "current";
-  // Fact endpoints default to one seven-day window so Power BI and ngrok do
-  // not wait on a single 90/365-day iXacs request. The generated M query
-  // requests consecutive windows and combines them in Power BI.
-  const defaultDays = table === "dates" || !table ? settings.historyDays : Math.min(7, settings.historyDays);
-  const range = dateRange(settings.historyDays, excelCurrent ? null : url.searchParams.get("from"), excelCurrent ? null : url.searchParams.get("to"), excelCurrent ? 1 : defaultDays);
+  const excelBulkHistory = destination === "excel" && table === "production" && url.searchParams.get("all") === "1";
+  // Power BI still uses seven-day windows in its generated M query. Excel bulk
+  // (`all=1`) loads the full configured history in one HTTP round trip.
+  const defaultDays = table === "dates" || !table || excelBulkHistory
+    ? settings.historyDays
+    : Math.min(7, settings.historyDays);
+  const range = dateRange(
+    settings.historyDays,
+    excelCurrent || excelBulkHistory ? null : url.searchParams.get("from"),
+    excelCurrent || excelBulkHistory ? null : url.searchParams.get("to"),
+    excelCurrent ? 1 : defaultDays,
+  );
   if (!range) return NextResponse.json({ error: "INVALID_DATE_RANGE" }, { status: 400 });
 
   if (!table) {
@@ -471,7 +478,7 @@ export async function serveTabularExport(request: Request, id: string, destinati
         const cached = await cachedLostTimeForDates(config.sourceConnectionId, range.from, range.to, result.bodies);
         lostTime.values = cached.values;
         const today = bangkokToday();
-        if (range.from <= today && range.to >= today) {
+        if (!excelBulkHistory && range.from <= today && range.to >= today) {
           lostTimeWarmPending.get(config.sourceConnectionId)?.delete(today);
           const live = await priorityLostTimeForDates(request.url, config.sourceConnectionId, today, today);
           for (const [key, columns] of live.values) lostTime.values.set(key, columns);
@@ -480,7 +487,7 @@ export async function serveTabularExport(request: Request, id: string, destinati
         enqueueLostTimeWarm(
           request.url,
           config.sourceConnectionId,
-          cached.missingDates.filter((date) => date !== today),
+          excelBulkHistory ? cached.missingDates : cached.missingDates.filter((date) => date !== today),
         );
       }
       result.warnings.push(...lostTime.warnings);

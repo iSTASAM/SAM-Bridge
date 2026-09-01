@@ -83,6 +83,81 @@
   border-top: 1px solid var(--border);
 }
 
+.gpt-company-group {
+  border-bottom: 1px solid var(--border);
+}
+
+.gpt-company-group-head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.gpt-company-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin: 7px 0 7px 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.gpt-company-expand:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.gpt-company-expand svg {
+  transition: transform 140ms ease;
+}
+
+.gpt-company-expand svg.is-open {
+  transform: rotate(180deg);
+}
+
+.gpt-company-group-label {
+  min-width: 0;
+}
+
+.gpt-company-count {
+  padding-right: 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.gpt-company-children {
+  padding: 0 8px 6px 42px;
+}
+
+.gpt-company-child {
+  border-bottom: 0;
+  padding: 10px 8px;
+  border-radius: 8px;
+}
+
+.gpt-company-child:hover {
+  background: var(--bg-hover);
+}
+
+.gpt-company-child strong {
+  font-weight: 450;
+  color: var(--text-secondary);
+}
+
+.gpt-company-group.is-open .gpt-company-group-label strong {
+  color: var(--text-primary);
+}
+
 .gpt-company {
   display: flex;
   align-items: flex-start;
@@ -113,14 +188,6 @@
 .gpt-company strong {
   font-size: 14px;
   font-weight: 500;
-}
-
-.gpt-company code {
-  overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-tertiary);
-  text-overflow: ellipsis;
 }
 
 .gpt-empty {

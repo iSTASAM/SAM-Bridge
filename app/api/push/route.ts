@@ -121,6 +121,7 @@ async function handle(request: NextRequest, method: string) {
     }
     const stored = await rememberPushBatch(body.parsed, session, request.headers.get("x-api-key"));
     let lineDispatchFailed = false;
+    let slackDispatchFailed = false;
     if (stored.acceptedEvents.length > 0) {
       try {
         const lineResult = await dispatchLineNotificationEvents(stored.acceptedEvents);
@@ -133,19 +134,24 @@ async function handle(request: NextRequest, method: string) {
       try {
         await dispatchPushNotifications(stored.acceptedEvents);
       } catch (error) {
+        slackDispatchFailed = true;
         console.error("Slack notification dispatch failed:", error);
       }
     }
     const { acceptedEvents: _acceptedEvents, ...storedResult } = stored;
     void _acceptedEvents;
-    if (lineDispatchFailed) {
+    if (lineDispatchFailed || slackDispatchFailed) {
       return json(
         {
           ...storedResult,
           ok: false,
           received: true,
           retryable: true,
-          error: "LINE_NOTIFICATION_DISPATCH_FAILED",
+          error: lineDispatchFailed && slackDispatchFailed
+            ? "NOTIFICATION_DISPATCH_FAILED"
+            : lineDispatchFailed
+              ? "LINE_NOTIFICATION_DISPATCH_FAILED"
+              : "SLACK_NOTIFICATION_DISPATCH_FAILED",
           receivedAt: new Date().toISOString(),
         },
         503,

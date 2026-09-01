@@ -360,6 +360,11 @@
   background: var(--bg-hover);
 }
 
+.btn-icon.is-active {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
 .btn-icon:disabled {
   color: var(--icon-muted);
   cursor: not-allowed;
@@ -950,11 +955,22 @@
 
 .flow-card.is-logo {
   justify-content: center;
-  background: #0c0d0e;
+  background: transparent;
+  box-shadow: none;
 }
 
 .flow-card.is-logo .flow-card-icon {
   width: auto;
+}
+
+.flow-card.is-logo:hover,
+.flow-card.is-logo.is-hot {
+  background: transparent;
+}
+
+.flow-card.is-logo:hover .flow-card-icon,
+.flow-card.is-logo.is-hot .flow-card-icon {
+  filter: none;
 }
 
 .flow-ixacs-logo {

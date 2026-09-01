@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { FiCheck, FiCopy, FiExternalLink, FiKey, FiRefreshCw } from "react-icons/fi";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FiCheck, FiChevronDown, FiCopy, FiExternalLink, FiKey, FiRefreshCw } from "react-icons/fi";
 import { useLocale } from "@/app/locale-context";
 import "@/app/styles/globals/68-gpt-actions.css";
 
-type Connection = { id: string; name: string; lastOkAt: string | null };
+type Customer = { id: string; name: string };
+type Connection = {
+  id: string;
+  name: string;
+  customerId: string;
+  customers?: Customer[];
+  lastOkAt: string | null;
+};
 type Settings = {
   configured: boolean;
   managedByEnvironment: boolean;
@@ -14,6 +21,63 @@ type Settings = {
   allowedCompanyIds: string[];
   connections: Connection[];
 };
+
+type CompanyGroup = {
+  connectionId: string;
+  name: string;
+  customers: Customer[];
+};
+
+type CompanySingle = {
+  id: string;
+  name: string;
+};
+
+function companyKey(connectionId: string, customerId?: string) {
+  return customerId ? `${connectionId}:${customerId}` : connectionId;
+}
+
+function buildCompanyLists(connections: Connection[]) {
+  const groups: CompanyGroup[] = [];
+  const singles: CompanySingle[] = [];
+
+  for (const connection of connections) {
+    const customers = connection.customers ?? [];
+    if (customers.length > 1) {
+      groups.push({ connectionId: connection.id, name: connection.name, customers });
+      continue;
+    }
+    singles.push({ id: connection.id, name: connection.name });
+  }
+
+  return { groups, singles };
+}
+
+function allGroupKeys(group: CompanyGroup) {
+  return group.customers.map((customer) => companyKey(group.connectionId, customer.id));
+}
+
+function normalizeSelected(allowed: string[], connections: Connection[]) {
+  const next = new Set<string>();
+  for (const id of allowed) {
+    const connection = connections.find((item) => item.id === id);
+    if (connection && (connection.customers?.length ?? 0) > 1) {
+      for (const customer of connection.customers ?? []) {
+        next.add(companyKey(connection.id, customer.id));
+      }
+      continue;
+    }
+    next.add(id);
+  }
+  return [...next];
+}
+
+function countSelectable(connections: Connection[]) {
+  return connections.reduce((sum, connection) => {
+    const customers = connection.customers ?? [];
+    return sum + (customers.length > 1 ? customers.length : 1);
+  }, 0);
+}
 
 const COPY = {
   th: {
@@ -38,6 +102,9 @@ const COPY = {
     openPolicy: "เปิดนโยบายความเป็นส่วนตัว",
     noCompanies: "ยังไม่มี iXacs connection กรุณาสร้างที่เมนู iXacs ก่อน",
     loadError: "โหลดการตั้งค่าไม่สำเร็จ",
+    groupCustomers: (n: number) => `${n} บริษัท`,
+    expandGroup: "ขยายกลุ่ม",
+    collapseGroup: "ย่อกลุ่ม",
   },
   en: {
     title: "GPT Actions",
@@ -61,6 +128,9 @@ const COPY = {
     openPolicy: "Open privacy policy",
     noCompanies: "No iXacs connection yet. Create one from the iXacs menu first.",
     loadError: "Could not load settings",
+    groupCustomers: (n: number) => `${n} companies`,
+    expandGroup: "Expand group",
+    collapseGroup: "Collapse group",
   },
   ja: {
     title: "GPT Actions",
@@ -84,6 +154,9 @@ const COPY = {
     openPolicy: "プライバシーポリシーを開く",
     noCompanies: "iXacs connection がありません。先に iXacs メニューで作成してください。",
     loadError: "設定を読み込めませんでした",
+    groupCustomers: (n: number) => `${n} 社`,
+    expandGroup: "グループを展開",
+    collapseGroup: "グループを折りたたむ",
   },
 } as const;
 
@@ -101,6 +174,16 @@ export function GptActionsPage({ publicUrl }: { publicUrl: string }) {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState("");
   const [error, setError] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
+
+  const companyLists = useMemo(
+    () => buildCompanyLists(settings?.connections ?? []),
+    [settings?.connections],
+  );
+  const selectableCount = useMemo(
+    () => countSelectable(settings?.connections ?? []),
+    [settings?.connections],
+  );
 
   useEffect(() => {
     void fetch("/api/gpt-actions/settings", { cache: "no-store" })
@@ -110,7 +193,7 @@ export function GptActionsPage({ publicUrl }: { publicUrl: string }) {
       })
       .then((value) => {
         setSettings(value);
-        setSelected(value.allowedCompanyIds);
+        setSelected(normalizeSelected(value.allowedCompanyIds, value.connections));
       })
       .catch((cause: Error) => setError(cause.message));
   }, [copy.loadError]);
@@ -118,7 +201,40 @@ export function GptActionsPage({ publicUrl }: { publicUrl: string }) {
   const base = normalizedOrigin(publicUrl);
   const schemaUrl = base ? `${base}/api/gpt-actions/openapi.json` : "";
   const privacyUrl = base ? `${base}/gpt-actions/privacy` : "";
-  const selectedLabel = selected.length === 0 ? copy.allCompanies : `${selected.length}/${settings?.connections.length ?? 0}`;
+  const selectedLabel = selected.length === 0 ? copy.allCompanies : `${selected.length}/${selectableCount}`;
+
+  function toggleSelected(id: string) {
+    setSelected((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
+
+  function toggleGroup(group: CompanyGroup) {
+    const keys = allGroupKeys(group);
+    setSelected((current) => {
+      const allSelected = keys.every((key) => current.includes(key));
+      if (allSelected) return current.filter((id) => !keys.includes(id));
+      return [...new Set([...current, ...keys])];
+    });
+  }
+
+  function toggleGroupExpanded(connectionId: string) {
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(connectionId)) next.delete(connectionId);
+      else next.add(connectionId);
+      return next;
+    });
+  }
+
+  function groupSelection(group: CompanyGroup) {
+    const keys = allGroupKeys(group);
+    const selectedCount = keys.filter((key) => selected.includes(key)).length;
+    return {
+      checked: selectedCount > 0 && selectedCount === keys.length,
+      indeterminate: selectedCount > 0 && selectedCount < keys.length,
+    };
+  }
 
   async function copyValue(id: string, value: string) {
     if (!value) return;
@@ -253,25 +369,33 @@ export function GptActionsPage({ publicUrl }: { publicUrl: string }) {
         </div>
         <div className="gpt-company-list">
           {settings?.connections.length ? (
-            settings.connections.map((company) => (
-              <label key={company.id} className="gpt-company">
-                <input
-                  type="checkbox"
-                  checked={selected.includes(company.id)}
-                  onChange={() =>
-                    setSelected((current) =>
-                      current.includes(company.id)
-                        ? current.filter((id) => id !== company.id)
-                        : [...current, company.id],
-                    )
-                  }
+            <>
+              {companyLists.groups.map((group) => (
+                <CompanyGroupRow
+                  key={group.connectionId}
+                  group={group}
+                  copy={copy}
+                  expanded={expandedGroups.has(group.connectionId)}
+                  selection={groupSelection(group)}
+                  selected={selected}
+                  onToggleExpanded={() => toggleGroupExpanded(group.connectionId)}
+                  onToggleGroup={() => toggleGroup(group)}
+                  onToggleCustomer={toggleSelected}
                 />
-                <span>
-                  <strong>{company.name}</strong>
-                  <code>{company.id}</code>
-                </span>
-              </label>
-            ))
+              ))}
+              {companyLists.singles.map((company) => (
+                <label key={company.id} className="gpt-company">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(company.id)}
+                    onChange={() => toggleSelected(company.id)}
+                  />
+                  <span>
+                    <strong>{company.name}</strong>
+                  </span>
+                </label>
+              ))}
+            </>
           ) : (
             <p className="gpt-empty">{copy.noCompanies}</p>
           )}
@@ -309,6 +433,81 @@ export function GptActionsPage({ publicUrl }: { publicUrl: string }) {
           <FiExternalLink />
         </a>
       </section>
+    </div>
+  );
+}
+
+function CompanyGroupRow({
+  group,
+  copy,
+  expanded,
+  selection,
+  selected,
+  onToggleExpanded,
+  onToggleGroup,
+  onToggleCustomer,
+}: {
+  group: CompanyGroup;
+  copy: (typeof COPY)[keyof typeof COPY];
+  expanded: boolean;
+  selection: { checked: boolean; indeterminate: boolean };
+  selected: string[];
+  onToggleExpanded: () => void;
+  onToggleGroup: () => void;
+  onToggleCustomer: (id: string) => void;
+}) {
+  const groupCheckboxRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (groupCheckboxRef.current) {
+      groupCheckboxRef.current.indeterminate = selection.indeterminate;
+    }
+  }, [selection.indeterminate]);
+
+  return (
+    <div className={`gpt-company-group${expanded ? " is-open" : ""}`}>
+      <div className="gpt-company-group-head">
+        <button
+          type="button"
+          className="gpt-company-expand"
+          aria-expanded={expanded}
+          aria-label={expanded ? copy.collapseGroup : copy.expandGroup}
+          onClick={onToggleExpanded}
+        >
+          <FiChevronDown size={16} className={expanded ? "is-open" : undefined} aria-hidden />
+        </button>
+        <label className="gpt-company gpt-company-group-label">
+          <input
+            ref={groupCheckboxRef}
+            type="checkbox"
+            checked={selection.checked}
+            onChange={onToggleGroup}
+          />
+          <span>
+            <strong>{group.name}</strong>
+          </span>
+        </label>
+        <span className="gpt-company-count">{copy.groupCustomers(group.customers.length)}</span>
+      </div>
+      {expanded ? (
+        <div className="gpt-company-children">
+          {group.customers.map((customer) => {
+            const id = companyKey(group.connectionId, customer.id);
+            return (
+              <label key={id} className="gpt-company gpt-company-child">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(id)}
+                  onChange={() => onToggleCustomer(id)}
+                />
+                <span>
+                  <strong>{customer.name || customer.id}</strong>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

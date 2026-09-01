@@ -1,6 +1,7 @@
 import { serveTabularExport } from "@/app/api/power-bi/exports/[id]/route";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

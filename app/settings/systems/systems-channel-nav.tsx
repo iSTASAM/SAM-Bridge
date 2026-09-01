@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import type { IconType } from "react-icons";
-import { FiActivity, FiArrowLeft, FiBell, FiClipboard, FiCpu, FiLogIn, FiRefreshCw, FiShield } from "react-icons/fi";
+import { FiActivity, FiArrowLeft, FiBell, FiChevronRight, FiClipboard, FiCpu, FiLogIn, FiRefreshCw, FiShield } from "react-icons/fi";
 import { DEST_ICONS } from "../exports/destination-icons";
 import { LINE_WORKS_ICON } from "../notifications/shared";
 import { SYSTEMS_COPY, type SystemsCopy } from "./copy";
@@ -47,15 +47,29 @@ export function ChannelBrandIcon({ id, size = 18 }: { id: SystemsChannel; size?:
   return <Icon size={size} />;
 }
 
+export function ChannelPageTitle({ channel, label }: { channel: SystemsChannel; label: string }) {
+  return (
+    <span className="as-channel-title">
+      <span className="as-brand-mark" aria-hidden>
+        <ChannelBrandIcon id={channel} size={34} />
+      </span>
+      {label}
+    </span>
+  );
+}
+
 export function SystemsStage({
   title,
+  lead,
+  titleLoading,
   actions,
   backHref,
   backLabel,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   lead?: string;
+  titleLoading?: boolean;
   actions?: ReactNode;
   backHref?: string;
   backLabel?: string;
@@ -70,7 +84,19 @@ export function SystemsStage({
         </Link>
       ) : null}
       <header className="as-head">
-        <h1 className="console-title">{title}</h1>
+        <div className="as-head-copy">
+          {titleLoading ? (
+            <div className="as-head-skel" aria-busy="true" aria-hidden>
+              <span className="skeleton as-title-skel" />
+              <span className="skeleton as-meta-skel" />
+            </div>
+          ) : (
+            <>
+              <h1 className="console-title">{title}</h1>
+              {lead ? <p className="as-machine-meta">{lead}</p> : null}
+            </>
+          )}
+        </div>
         {actions ? <div className="as-head-actions">{actions}</div> : null}
       </header>
       {children}
@@ -79,7 +105,7 @@ export function SystemsStage({
 }
 
 export function SystemsFrame(props: {
-  title: string;
+  title: ReactNode;
   lead?: string;
   actions?: ReactNode;
   children: ReactNode;
@@ -89,35 +115,21 @@ export function SystemsFrame(props: {
 
 export function SystemsHub({ copy }: { copy: SystemsCopy }) {
   return (
-    <SystemsStage title={copy.title}>
-      <div className="as-console-table-wrap">
-        <table className="as-console-table">
-          <thead>
-            <tr>
-              <th>{copy.colMenu}</th>
-              <th>{copy.colDetail}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ADMIN_MENUS.map((item) => {
-              const Icon = item.icon;
-              return (
-                <tr key={item.id}>
-                  <td>
-                    <Link href={item.href} className="as-console-item">
-                      <span className="as-menu-icon" aria-hidden>
-                        <Icon size={16} />
-                      </span>
-                      <strong>{item.label(copy)}</strong>
-                    </Link>
-                  </td>
-                  <td>{item.desc ? item.desc(copy) : copy.never}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+    <SystemsStage title={copy.title} lead={copy.overviewLead}>
+      <nav className="as-menu" aria-label={copy.title}>
+        {ADMIN_MENUS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link key={item.id} href={item.href} className="as-menu-row">
+              <span className="as-menu-icon" aria-hidden>
+                <Icon size={16} />
+              </span>
+              <strong>{item.label(copy)}</strong>
+              <FiChevronRight size={16} aria-hidden />
+            </Link>
+          );
+        })}
+      </nav>
     </SystemsStage>
   );
 }
@@ -125,29 +137,17 @@ export function SystemsHub({ copy }: { copy: SystemsCopy }) {
 export function SystemsAlertsHub({ copy }: { copy: SystemsCopy }) {
   return (
     <SystemsStage title={copy.menuAlerts} backHref="/settings/systems" backLabel={copy.back}>
-      <div className="as-console-table-wrap">
-        <table className="as-console-table">
-          <thead>
-            <tr>
-              <th>{copy.colMenu}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {SYSTEM_CHANNELS.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <Link href={item.href} className="as-console-item">
-                    <span className="as-menu-icon" aria-hidden>
-                      <ChannelBrandIcon id={item.id} />
-                    </span>
-                    <strong>{item.label(copy)}</strong>
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <nav className="as-menu" aria-label={copy.menuAlerts}>
+        {SYSTEM_CHANNELS.map((item) => (
+          <Link key={item.id} href={item.href} className="as-menu-row">
+            <span className="as-menu-icon" aria-hidden>
+              <ChannelBrandIcon id={item.id} />
+            </span>
+            <strong>{item.label(copy)}</strong>
+            <FiChevronRight size={16} aria-hidden />
+          </Link>
+        ))}
+      </nav>
     </SystemsStage>
   );
 }
@@ -170,7 +170,7 @@ export function SystemsPageShell({
   backHref,
 }: {
   copy: SystemsCopy;
-  title: string;
+  title: ReactNode;
   loading?: boolean;
   onRefresh?: () => void;
   extraActions?: ReactNode;
@@ -186,6 +186,7 @@ export function SystemsPageShell({
       actions={
         onRefresh || extraActions ? (
           <>
+            {extraActions}
             {onRefresh ? (
               <button
                 type="button"
@@ -197,7 +198,6 @@ export function SystemsPageShell({
                 <FiRefreshCw size={16} />
               </button>
             ) : null}
-            {extraActions}
           </>
         ) : null
       }

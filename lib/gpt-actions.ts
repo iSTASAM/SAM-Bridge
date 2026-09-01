@@ -81,9 +81,28 @@ export function setAllowedGptCompanies(companyIds: string[]) {
   return publicGptActionSettings();
 }
 
-export function isGptCompanyAllowed(companyId: string) {
+export function gptCompanyKey(connectionId: string, customerId?: string) {
+  return customerId ? `${connectionId}:${customerId}` : connectionId;
+}
+
+export function parseGptCompanyKey(value: string) {
+  const index = value.indexOf(":");
+  if (index <= 0) return { connectionId: value, customerId: undefined as string | undefined };
+  return {
+    connectionId: value.slice(0, index),
+    customerId: value.slice(index + 1) || undefined,
+  };
+}
+
+export function isGptCompanyAllowed(connectionId: string, customerId?: string) {
   const allowed = load().allowedCompanyIds;
-  return allowed.length === 0 || allowed.includes(companyId);
+  if (allowed.length === 0) return true;
+  if (allowed.includes(connectionId)) return true;
+  if (customerId && allowed.includes(gptCompanyKey(connectionId, customerId))) return true;
+  const prefix = `${connectionId}:`;
+  const granular = allowed.filter((id) => id.startsWith(prefix));
+  if (granular.length === 0) return allowed.includes(connectionId);
+  return customerId ? granular.includes(gptCompanyKey(connectionId, customerId)) : false;
 }
 
 export function authenticateGptAction(request: Request) {

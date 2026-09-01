@@ -39,6 +39,7 @@ export async function listOpenRouterModels(apiKey: string): Promise<OpenRouterMo
   const response = await fetch(`${OPENROUTER_BASE}/models`, {
     headers: openRouterHeaders(apiKey),
     cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
   });
   const data = (await response.json().catch(() => ({}))) as {
     data?: Array<{ id?: string; name?: string; architecture?: { output_modalities?: string[] } }>;

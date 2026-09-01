@@ -18,6 +18,7 @@ import {
   ALL_FIELD_IDS,
   DESTINATIONS,
   FIELD_SECTIONS,
+  bangkokDaysFromMonthStart,
   type DestinationType,
   type ExportConfig,
   type ExportFormat,
@@ -63,7 +64,15 @@ const EMPTY_DRAFT: DraftForm = {
   alertRules: [],
   powerBiSettings: { datasets: ["production", "lost-time"], historyDays: 90, includeLineDimension: true, includeDateDimension: true },
   powerBiApiKey: "",
-  excelSettings: { datasets: ["production"], tables: ["history", "current"], historyDays: 30, includeLineDimension: false, includeDateDimension: false, refreshMinutes: 15, autoRefresh: true },
+  excelSettings: {
+    datasets: ["production"],
+    tables: ["history", "current"],
+    historyDays: bangkokDaysFromMonthStart(),
+    includeLineDimension: false,
+    includeDateDimension: false,
+    refreshMinutes: 15,
+    autoRefresh: false,
+  },
   excelApiKey: "",
 };
 

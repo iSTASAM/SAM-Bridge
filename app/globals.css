@@ -11,8 +11,13 @@
 @import "./styles/globals/55-data-sources.css";
 @import "./styles/globals/60-export-wizard.css";
 @import "./styles/globals/65-ai-models.css";
+@import "./styles/globals/66-ai-heatmap.css";
 @import "./styles/globals/70-dialogs-overlays.css";
 @import "./styles/globals/72-notifications.css";
 @import "./styles/globals/73-line-webhook.css";
 @import "./styles/globals/74-line-login.css";
 @import "./styles/globals/76-admin-systems.css";
+@import "./styles/globals/78-workflow.css";
+@import "./styles/globals/79-docs.css";
+@import "./styles/globals/80-user-profile.css";
+

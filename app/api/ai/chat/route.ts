@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { findOrCreateConversation, recordChatMessage } from "@/lib/ai-chat-store";
 import {
   ProductionAiError,
   runProductionAiChat,
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
     provider?: unknown;
     providerId?: unknown;
     model?: unknown;
+    conversationId?: unknown;
+    userId?: unknown;
   };
   const connectionIds = Array.isArray(body.connectionIds)
     ? body.connectionIds.filter((id): id is string => typeof id === "string")
@@ -37,16 +40,36 @@ export async function POST(request: Request) {
     : typeof body.provider === "string"
       ? body.provider
       : undefined;
+  const question = typeof body.question === "string" ? body.question : "";
 
   try {
     const result = await runProductionAiChat({
-      question: typeof body.question === "string" ? body.question : "",
+      question,
       connectionIds,
       dateQuery: body.dateQuery,
       history: parseHistory(body.history),
       providerId,
       model: typeof body.model === "string" ? body.model : undefined,
+      channel: "web",
+      userId: typeof body.userId === "string" ? body.userId : undefined,
     });
+
+    if (question) {
+      void findOrCreateConversation({
+        conversationId: typeof body.conversationId === "string" ? body.conversationId : undefined,
+        userId: typeof body.userId === "string" ? body.userId : undefined,
+        channelType: "web",
+        title: question.slice(0, 50),
+        providerId,
+        model: typeof body.model === "string" ? body.model : undefined,
+      }).then((convId) => {
+        if (convId) {
+          void recordChatMessage({ conversationId: convId, role: "user", content: question });
+          void recordChatMessage({ conversationId: convId, role: "assistant", content: result.answer });
+        }
+      }).catch(() => undefined);
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ProductionAiError) {

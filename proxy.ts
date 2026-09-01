@@ -29,6 +29,7 @@ function isPublicPath(pathname: string) {
     pathname === "/api/line/auth/login" ||
     pathname === "/api/line/auth/logout" ||
     pathname === "/api/line/webhook" ||
+    pathname === "/api/slack/events" ||
     pathname === "/api/gpt-actions/openapi.json" ||
     pathname === "/gpt-actions/privacy"
   );
@@ -47,14 +48,14 @@ function isTabularExportApi(pathname: string) {
 }
 
 function isAdminPage(pathname: string) {
-  return ["/settings/sources", "/settings/ai", "/settings/gpt-actions", "/settings/exports", "/settings/notifications", "/settings/line-webhook", "/settings/systems"].some(
+  return ["/settings/sources", "/settings/ai", "/settings/gpt-actions", "/settings/exports", "/settings/line-webhook", "/settings/systems"].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 }
 
 function isAdminApi(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (["/api/sources", "/api/ai", "/api/gpt-actions/settings", "/api/exports", "/api/notifications", "/api/line/webhook-settings", "/api/line-users", "/api/admin/systems", "/api/admin/accounts"].some(
+  if (["/api/sources", "/api/ai", "/api/gpt-actions/settings", "/api/exports", "/api/notifications", "/api/slack/settings", "/api/line/webhook-settings", "/api/line-users", "/api/admin/systems", "/api/admin/accounts"].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   )) return true;
   const isDataRead =

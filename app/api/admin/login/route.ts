@@ -9,12 +9,16 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as { username?: unknown; password?: unknown } | null;
   const username = typeof body?.username === "string" ? body.username.trim() : "";
   const password = typeof body?.password === "string" ? body.password : "";
-  const envOk = await credentialsMatch(username, password);
-  const stored = envOk ? null : await verifyAdminAccount(username, password);
-  if (!envOk && !stored) {
+  const stored = await verifyAdminAccount(username, password);
+  const envOk = !stored && (await credentialsMatch(username, password));
+  if (!stored && !envOk) {
     return NextResponse.json({ ok: false, error: "Invalid credentials" }, { status: 401 });
   }
-  const token = await createSessionToken({ role: "admin", username: stored?.username || username });
+  const token = await createSessionToken({
+    role: "admin",
+    username: stored?.username || username,
+    adminAccountId: stored?.id ?? "env",
+  });
   if (!token) return NextResponse.json({ ok: false, error: "Could not create session" }, { status: 500 });
   const response = NextResponse.json({ ok: true });
   response.cookies.set(AUTH_COOKIE, token, sessionCookieOptions());

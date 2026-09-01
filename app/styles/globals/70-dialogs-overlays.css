@@ -550,12 +550,13 @@
     align-items: flex-start;
   }
 
-  .machine-page-head .btn-primary {
-    width: 100%;
+  .machine-page-head .btn-primary,
+  .machine-page-head .console-icon-btn {
+    flex-shrink: 0;
   }
 
-  .machine-card-actions {
-    width: 100%;
+  .machine-table-actions-inner {
+    flex-wrap: wrap;
     justify-content: flex-start;
   }
 

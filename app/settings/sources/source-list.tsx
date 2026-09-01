@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { FiEdit2, FiInbox, FiPlus, FiTrash2, FiX } from "react-icons/fi";
+import { FiEdit2, FiPlus, FiTrash2, FiX } from "react-icons/fi";
 import { useLocale } from "../../locale-context";
 import { SOURCE_COPY } from "./source-copy";
 import { SOURCE_ICONS } from "./source-icons";
@@ -65,17 +65,6 @@ export function SourceList() {
             ))}
           </div>
         </div>
-      ) : configs.length === 0 ? (
-        <section className="source-empty-state">
-          <span className="source-empty-icon">
-            <FiInbox size={22} />
-          </span>
-          <h2>{copy.emptyTitle}</h2>
-          <p>{copy.empty}</p>
-          <Link href="/settings/sources/new" className="btn btn-primary console-icon-btn" aria-label={copy.create}>
-            <FiPlus size={16} />
-          </Link>
-        </section>
       ) : (
         <div className="source-table-wrap">
           <table className="source-table">

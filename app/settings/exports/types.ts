@@ -30,19 +30,30 @@ export const DEFAULT_POWER_BI_SETTINGS: PowerBiSettings = {
   includeDateDimension: true,
 };
 export type ExcelTable = "history" | "current";
-export type ExcelSettings = PowerBiSettings & {
+export type ExcelSettings = Omit<PowerBiSettings, "historyDays"> & {
   tables: ExcelTable[];
+  /** Rolling lookback in days (default: day-of-month in Asia/Bangkok = month-to-date). */
+  historyDays: number;
   refreshMinutes: 5 | 10 | 15;
   autoRefresh: boolean;
 };
+
+/** Days from the 1st of the current Bangkok calendar month through today (inclusive). */
+export function bangkokDaysFromMonthStart(now = new Date()): number {
+  const day = Number(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Bangkok", day: "numeric" }).format(now),
+  );
+  return Number.isFinite(day) && day > 0 ? day : 1;
+}
+
 export const DEFAULT_EXCEL_SETTINGS: ExcelSettings = {
   datasets: ["production"],
   tables: ["history", "current"],
-  historyDays: 30,
+  historyDays: bangkokDaysFromMonthStart(),
   includeLineDimension: false,
   includeDateDimension: false,
   refreshMinutes: 15,
-  autoRefresh: true,
+  autoRefresh: false,
 };
 export type AlertRule = {
   metric: "currentCtOverBase" | "volumeRate" | "operationalAvailability";

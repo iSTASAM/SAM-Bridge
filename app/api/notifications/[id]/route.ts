@@ -14,7 +14,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const rule = getNotificationRule(id);
+  const rule = await getNotificationRule(id);
   if (!rule) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   return NextResponse.json({ rule: publicNotificationRule(rule) });
 }
@@ -25,7 +25,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
   try {
-    const rule = updateNotificationRule(id, await request.json());
+    const rule = await updateNotificationRule(id, await request.json());
     if (!rule) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
     return NextResponse.json({ rule: publicNotificationRule(rule) });
   } catch (error) {
@@ -41,9 +41,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  if (!deleteNotificationRule(id)) {
+  if (!(await deleteNotificationRule(id))) {
     return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   }
-  deleteNotificationState(id);
+  await deleteNotificationState(id);
   return NextResponse.json({ ok: true });
 }

@@ -58,8 +58,33 @@ function last4(value: string) {
 
 function storeSecret(plain: string) {
   if (connectionSecretsConfigured()) return encryptSecret(plain);
-  if (supabaseConfigured()) throw new Error("CONNECTIONS_ENCRYPTION_KEY_MISSING");
   return plain;
+}
+
+async function hydrateFromSupabase() {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    hydrateFromFile();
+    return;
+  }
+  const { data, error } = await supabase.from("ai_providers").select("*").order("created_at", { ascending: true });
+  if (error) {
+    console.warn(`Supabase ai_providers query failed (${error.message}); falling back to local file.`);
+    hydrateFromFile();
+    return;
+  }
+  const rows = (data as DbRow[] | null) ?? [];
+  store = new Map(rows.flatMap((row) => {
+    const item = rowToProvider(row);
+    return item ? [[item.id, item] as const] : [];
+  }));
+  if (store.size > 0) return;
+  hydrateFromFile();
+  if (store.size === 0) return;
+  const { error: upsertError } = await supabase.from("ai_providers").upsert([...store.values()].map(providerToRow));
+  if (upsertError) {
+    console.warn(`Supabase ai_providers migration upsert failed (${upsertError.message}).`);
+  }
 }
 
 function readSecret(stored: string) {
@@ -224,22 +249,6 @@ async function persistDefault() {
   }
 }
 
-async function hydrateFromSupabase() {
-  const supabase = getSupabaseAdmin();
-  if (!supabase) throw new Error("SUPABASE_NOT_CONFIGURED");
-  const { data, error } = await supabase.from("ai_providers").select("*").order("created_at", { ascending: true });
-  if (error) throw new Error(`AI_PROVIDERS_LOAD_FAILED: ${error.message}`);
-  const rows = (data as DbRow[] | null) ?? [];
-  store = new Map(rows.flatMap((row) => {
-    const item = rowToProvider(row);
-    return item ? [[item.id, item] as const] : [];
-  }));
-  if (store.size > 0) return;
-  hydrateFromFile();
-  if (store.size === 0) return;
-  const { error: upsertError } = await supabase.from("ai_providers").upsert([...store.values()].map(providerToRow));
-  if (upsertError) throw new Error(`AI_PROVIDERS_MIGRATE_FAILED: ${upsertError.message}`);
-}
 
 async function ensureHydrated() {
   if (hydrated) return;

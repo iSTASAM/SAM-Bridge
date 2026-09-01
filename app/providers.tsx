@@ -27,7 +27,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <AppSidebar hidden={hidden} onHide={hide} onShow={show} />
       <div className="app-main">
         <div className="app-topbar">
-          <AppToolbar />
+          <AppToolbar showDocs />
         </div>
         <main className="app-content">{children}</main>
       </div>

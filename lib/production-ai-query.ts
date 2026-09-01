@@ -263,6 +263,8 @@ export function resolveDateQuery(
   return dateQueryFromQuestion(question) ?? dateQueryFromHistory(history) ?? fallback ?? {};
 }
 
+const IGNORED_LINE_HINT_WORDS = /^(วัน|date|ข้อมูล|data|line|ไลน์|ช่วงเวลาเดียวกัน|ช่วงเวลา|เวลาเดียวกัน|วันเดียวกัน|เดือนเดียวกัน|ช่วงนี้|วันนี้|เมื่อวาน|วันที่|เดือนนี้|ปีนี้|รอบนี้|รอบที่แล้ว|same time|same period|today|yesterday|this month|last month)$/i;
+
 export function lineHintsFromQuestion(question: string, history: ProductionAiHistoryItem[] = []) {
   const texts = [question, ...history.filter((item) => item.role === "user").map((item) => item.text)].map(normalizeQuestion);
   const hints = new Set<string>();
@@ -270,7 +272,7 @@ export function lineHintsFromQuestion(question: string, history: ProductionAiHis
     const matched = text.matchAll(/(?:เอาแค่|เฉพาะ|แค่|only|just|line)\s+([A-Za-z0-9_\-./]+|[ก-๙A-Za-z0-9_\-./]+)/gi);
     for (const match of matched) {
       const hint = match[1].trim();
-      if (hint && !/^(วัน|date|ข้อมูล|data|line)$/i.test(hint)) hints.add(hint);
+      if (hint && !IGNORED_LINE_HINT_WORDS.test(hint)) hints.add(hint);
     }
   }
   return [...hints];
@@ -280,6 +282,7 @@ export function matchingProductionRows<T extends Record<string, unknown>>(
   rows: T[],
   question: string,
   hints: string[],
+  history: ProductionAiHistoryItem[] = [],
 ) {
   const text = normalizeQuestion(question).toLocaleLowerCase("en-US");
   const normalizedHints = hints.map((hint) => hint.toLocaleLowerCase("en-US")).filter((hint) => hint.length >= 2);
@@ -291,13 +294,35 @@ export function matchingProductionRows<T extends Record<string, unknown>>(
   }
 
   const mentioned = rows.filter((row) => searchable(row).some((value) => value.length >= 3 && text.includes(value)));
-  return mentioned.length ? mentioned : rows;
+  if (mentioned.length) return mentioned;
+
+  if (history.length) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      const itemText = normalizeQuestion(history[i].text).toLocaleLowerCase("en-US");
+      const historyMentioned = rows.filter((row) => searchable(row).some((value) => value.length >= 3 && itemText.includes(value)));
+      if (historyMentioned.length) return historyMentioned;
+    }
+  }
+
+  return rows;
 }
 
-export function needsLostTime(question: string, hasLineFilter: boolean) {
-  if (/lost[ -]?time|losstime|downtime|เวลาสูญเสีย|สาเหตุ(?:การ)?หยุด|หยุด.*(?:เพราะ|สาเหตุ)|pareto|พาเรโต|stop time|ชั่วโมงหยุด/i.test(question)) {
+export function needsLostTime(question: string, hasLineFilter: boolean, history: ProductionAiHistoryItem[] = []) {
+  const isLostTimeQuery = (str: string) =>
+    /lost[ -]?time|losstime|downtime|เวลาสูญเสีย|สาเหตุ(?:การ)?หยุด|หยุด.*(?:เพราะ|สาเหตุ)|pareto|พาเรโต|stop time|ชั่วโมงหยุด|kaizen|ไคเซ็น/i.test(str);
+
+  if (isLostTimeQuery(question)) {
     return true;
   }
+
+  if (history.length) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (isLostTimeQuery(history[i].text)) {
+        return true;
+      }
+    }
+  }
+
   // Line-scoped summaries/details should include Lost Time like the Settings data page.
   return hasLineFilter && /สรุป|summary|รวม|overview|รายละเอียด|วิเคราะห์|performance/i.test(question);
 }

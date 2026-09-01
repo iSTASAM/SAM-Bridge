@@ -222,7 +222,7 @@ export function SystemAlerts({ machineId }: { machineId: string }) {
   return (
     <SystemShell
       machineId={machineId}
-      title={machine?.name || copy.navAlerts}
+      title={machine?.name ?? ""}
       meta={machine?.companyLabel}
       copy={copy}
       active="alerts"
@@ -230,16 +230,20 @@ export function SystemAlerts({ machineId }: { machineId: string }) {
       onRefresh={() => void load()}
     >
       <div className="as-tools">
-        <input
-          className="pac-search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={copy.searchUsers}
-          aria-label={copy.searchUsers}
-        />
+        {loading && !machine ? (
+          <span className="skeleton as-tools-skel" aria-hidden />
+        ) : (
+          <input
+            className="pac-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={copy.searchUsers}
+            aria-label={copy.searchUsers}
+          />
+        )}
       </div>
       {error ? <p className="inline-error">{error}</p> : null}
-      {loading ? (
+      {loading && !machine ? (
         <div className="as-data-wrap" aria-busy="true">
           <div className="as-data">
             <div className="as-data-row as-data-head as-data-alerts">
@@ -251,7 +255,7 @@ export function SystemAlerts({ machineId }: { machineId: string }) {
               <span>{copy.colEnabled}</span>
               <span />
             </div>
-            {[0, 1, 2].map((row) => (
+            {[0, 1, 2, 3].map((row) => (
               <div key={row} className="as-data-row as-data-alerts">
                 <span className="skeleton skeleton-key" />
                 <span className="skeleton skeleton-assign" />
@@ -337,17 +341,21 @@ export function SystemAlerts({ machineId }: { machineId: string }) {
             {formError ? <p className="inline-error">{formError}</p> : null}
             <label className="as-field">
               <span>{copy.colAlertStatus}</span>
-              <select
-                value={statusPick}
-                onChange={(event) => setStatusPick(event.target.value)}
-                disabled={catalogLoading}
-                aria-busy={catalogLoading}
-              >
-                {catalog.map((item) => (
-                  <option key={item.uuid} value={item.uuid}>{catalogLabel(item, locale)}</option>
-                ))}
-              </select>
-              {catalogLoading ? <small className="as-field-hint">{copy.loadingStatuses}</small> : null}
+              {catalogLoading ? (
+                <div className="as-field-skel" aria-busy="true" aria-label={copy.loadingStatuses}>
+                  <span className="skeleton" />
+                  <span className="skeleton" />
+                </div>
+              ) : (
+                <select
+                  value={statusPick}
+                  onChange={(event) => setStatusPick(event.target.value)}
+                >
+                  {catalog.map((item) => (
+                    <option key={item.uuid} value={item.uuid}>{catalogLabel(item, locale)}</option>
+                  ))}
+                </select>
+              )}
             </label>
             <label className="as-field">
               <span>{copy.durationLabel}</span>

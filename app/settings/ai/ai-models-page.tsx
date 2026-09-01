@@ -7,6 +7,7 @@ import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenRouterIcon } from "../../flow/a
 import { useLocale, type Locale } from "../../locale-context";
 import { SYSTEMS_COPY } from "../systems/copy";
 import { SystemsStage } from "../systems/systems-channel-nav";
+import { AiUsageHeatmap } from "./ai-usage-heatmap";
 
 type ProviderKind = "openai" | "anthropic" | "gemini" | "openrouter" | "custom";
 type UsageId = "maintenance" | "production" | "events" | "enrichment";
@@ -56,6 +57,7 @@ function copy(locale: Locale) {
       demo: "API Key ถูกจัดเก็บฝั่ง Server และจะไม่ถูกส่งกลับมาแสดงบน Browser",
       providers: "Providers",
       providersLead: "Connect and manage AI APIs",
+      heatmap: "การใช้งาน",
       usage: "Model Usage",
       usageLead: "Choose which connected model SAM uses for each task",
       defaultTitle: "Default Model",
@@ -119,6 +121,7 @@ function copy(locale: Locale) {
       demo: "APIキーはサーバー側に保存され、ブラウザには再表示されません",
       providers: "Providers",
       providersLead: "Connect and manage AI APIs",
+      heatmap: "利用状況",
       usage: "Model Usage",
       usageLead: "Choose which connected model SAM uses for each task",
       defaultTitle: "Default Model",
@@ -181,6 +184,7 @@ function copy(locale: Locale) {
     demo: "API keys are stored server-side and are never returned to the browser",
     providers: "Providers",
     providersLead: "Connect and manage AI APIs",
+    heatmap: "Usage",
     usage: "Model Usage",
     usageLead: "Choose which connected model SAM uses for each task",
     defaultTitle: "Default Model",
@@ -307,7 +311,7 @@ export function AiModelsPage() {
   });
   const [defaultModel, setDefaultModel] = useState<ModelRef | null>(null);
   const [defaultStatus, setDefaultStatus] = useState("");
-  const [tab, setTab] = useState<"providers" | "default">("providers");
+  const [tab, setTab] = useState<"providers" | "heatmap" | "default">("providers");
   const [drawer, setDrawer] = useState<Drawer>(null);
 
   useEffect(() => {
@@ -463,6 +467,15 @@ export function AiModelsPage() {
         <button
           type="button"
           role="tab"
+          className={`as-tab${tab === "heatmap" ? " is-active" : ""}`}
+          aria-selected={tab === "heatmap"}
+          onClick={() => setTab("heatmap")}
+        >
+          {label.heatmap}
+        </button>
+        <button
+          type="button"
+          role="tab"
           className={`as-tab${tab === "default" ? " is-active" : ""}`}
           aria-selected={tab === "default"}
           onClick={() => setTab("default")}
@@ -520,6 +533,8 @@ export function AiModelsPage() {
           </table>
         </div>
       </section>
+      ) : tab === "heatmap" ? (
+        <AiUsageHeatmap />
       ) : (
       <section className="ai-section as-default-panel">
         <div className="ai-setting">

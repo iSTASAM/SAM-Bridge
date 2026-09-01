@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function LineWebhookRedirectPage() {
-  redirect("/settings/notifications/line-webhook");
+  redirect("/settings/systems/line");
 }

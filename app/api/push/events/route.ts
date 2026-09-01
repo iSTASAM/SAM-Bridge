@@ -9,6 +9,7 @@ import {
 } from "@/lib/ixacs-store";
 import { applyLiveStatus, getLiveLineStatusesByConnection } from "@/lib/push-live-status";
 import { dispatchLineStatusSnapshots } from "@/lib/line-notification-runner";
+import { dispatchSlackStatusSnapshots } from "@/lib/notification-runner";
 
 export const dynamic = "force-dynamic";
 
@@ -134,18 +135,20 @@ async function getConfiguredLineRows(input: {
   });
   rows.sort((a, b) => (a.lineNameTh ?? a.lineName ?? "").localeCompare(b.lineNameTh ?? b.lineName ?? "", "th"));
 
-  // When this page polls live iXacs status, also drive LINE alerts for matching rules.
+  // When this page polls live iXacs status, also drive LINE + Slack alerts for matching rules.
   // Instant delivery still prefers Push → /api/push; this covers payloads that omit status.
   after(() => {
-    void dispatchLineStatusSnapshots(
-      rows.map((row) => ({
-        lineUuid: row.lineUuid ?? "",
-        statusUuid: row.statusUuid,
-        connectionId: row.connectionId,
-      })),
-      new Date().toISOString(),
-    ).catch((error) => {
+    const snapshots = rows.map((row) => ({
+      lineUuid: row.lineUuid ?? "",
+      statusUuid: row.statusUuid,
+      connectionId: row.connectionId,
+    }));
+    const observedAt = new Date().toISOString();
+    void dispatchLineStatusSnapshots(snapshots, observedAt).catch((error) => {
       console.warn("LINE notification from push events live poll failed:", error);
+    });
+    void dispatchSlackStatusSnapshots(snapshots, observedAt).catch((error) => {
+      console.warn("Slack notification from push events live poll failed:", error);
     });
   });
 

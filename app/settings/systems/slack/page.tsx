@@ -1,5 +1,5 @@
-import { ChannelSettings } from "../channel-settings";
+import { SlackChannelPage } from "./slack-channel-page";
 
 export default function SystemsSlackPage() {
-  return <ChannelSettings channel="slack" />;
+  return <SlackChannelPage />;
 }

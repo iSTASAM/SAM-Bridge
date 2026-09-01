@@ -25,7 +25,6 @@ import {
 import { useLocale } from "../../locale-context";
 import { DX_COPY, type DxCopy } from "./data-explorer-copy";
 import { type Connection } from "./types";
-import { DataAiChat } from "./data-ai-chat";
 
 export type ExplorerRow = {
   uuid: string;
@@ -215,7 +214,6 @@ export function DataExplorer({ machineId }: { machineId: string }) {
   const today = bangkokDateKey();
 
   const [machine, setMachine] = useState<Connection | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [machines, setMachines] = useState<Connection[]>([]);
   const [rows, setRows] = useState<ExplorerRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -269,12 +267,6 @@ export function DataExplorer({ machineId }: { machineId: string }) {
   const dateQueryRef = useRef<Record<string, string>>({ mode: "day", date: selectedDate });
   const skipSelectFetch = useRef(true);
   const skipCustomerFetch = useRef(true);
-
-  useEffect(() => {
-    void fetch("/api/session", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() : null)
-      .then((session) => setIsAdmin(session?.role === "admin"));
-  }, []);
 
   useEffect(() => {
     selectedIdsRef.current = selectedIds;
@@ -1348,9 +1340,6 @@ export function DataExplorer({ machineId }: { machineId: string }) {
           onCopy={copyText}
           onClose={() => setSelected(null)}
         />
-      ) : null}
-      {isAdmin ? (
-        <DataAiChat connectionIds={selectedIds} dateQuery={appliedDateQuery} />
       ) : null}
     </div>
   );

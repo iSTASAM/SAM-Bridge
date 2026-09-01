@@ -1,19 +1,59 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FiBell, FiUsers } from "react-icons/fi";
 import { useLocale } from "../../locale-context";
 import { SYSTEMS_COPY } from "./copy";
 import { formatWhen } from "./shared";
-import { SystemsPageShell } from "./systems-channel-nav";
+import { ChannelPageTitle, SystemsPageShell } from "./systems-channel-nav";
 import type { SystemMachine, SystemsSummary } from "./types";
 
 type UsageFilter = "all" | "users" | "online";
 
+function companyNames(machine: SystemMachine): string[] {
+  if (machine.companyLabel && machine.companyLabel !== "—") {
+    return machine.companyLabel.split(" · ").map((name) => name.trim()).filter(Boolean);
+  }
+  return machine.customers.map((item) => item.name).filter(Boolean);
+}
+
+function CompanyCell({ names }: { names: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  if (names.length === 0) return <span className="as-muted">—</span>;
+  const limit = 4;
+  const hidden = Math.max(0, names.length - limit);
+  const visible = expanded ? names : names.slice(0, limit);
+  return (
+    <div className={`as-company-list${expanded ? " is-expanded" : ""}`}>
+      {visible.map((name) => (
+        <span key={name} className="as-company-chip">
+          {name}
+        </span>
+      ))}
+      {hidden > 0 ? (
+        <button
+          type="button"
+          className="as-company-more"
+          aria-expanded={expanded}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setExpanded((value) => !value);
+          }}
+        >
+          {expanded ? "−" : `+${hidden}`}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function AdminSystems() {
   const { locale } = useLocale();
   const copy = SYSTEMS_COPY[locale];
+  const router = useRouter();
   const [machines, setMachines] = useState<SystemMachine[]>([]);
   const [summary, setSummary] = useState<SystemsSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,14 +91,15 @@ export function AdminSystems() {
       if (filter === "users" && machine.userCount === 0) return false;
       if (filter === "online" && machine.onlineCount === 0) return false;
       if (!needle) return true;
-      return `${machine.name} ${machine.companyLabel}`.toLowerCase().includes(needle);
+      const companies = companyNames(machine).join(" ");
+      return `${machine.name} ${companies}`.toLowerCase().includes(needle);
     });
   }, [filter, machines, search]);
 
   return (
     <SystemsPageShell
       copy={copy}
-      title={copy.navLine}
+      title={<ChannelPageTitle channel="line" label={copy.navLine} />}
       loading={loading}
       onRefresh={() => void load()}
       backHref="/settings/systems/alerts"
@@ -68,22 +109,18 @@ export function AdminSystems() {
         <article className="as-stat">
           <span className="as-stat-label">{copy.machines}</span>
           <strong>{summary?.machineWithUsers ?? 0}</strong>
-          <span className="as-stat-hint">{copy.ofMachines(summary?.machineCount ?? 0)}</span>
         </article>
         <article className="as-stat">
           <span className="as-stat-label">{copy.users}</span>
           <strong>{summary?.userCount ?? 0}</strong>
-          <span className="as-stat-hint">{summary?.onlineCount ?? 0} {copy.loggedIn}</span>
         </article>
         <article className="as-stat">
           <span className="as-stat-label">{copy.online}</span>
           <strong>{summary?.onlineCount ?? 0}</strong>
-          <span className="as-stat-hint">{copy.loggedIn}</span>
         </article>
         <article className="as-stat">
           <span className="as-stat-label">{copy.rules}</span>
           <strong>{summary?.enabledRuleCount ?? 0}</strong>
-          <span className="as-stat-hint">{copy.ofRules(summary?.ruleCount ?? 0)}</span>
         </article>
       </section>
 
@@ -122,7 +159,7 @@ export function AdminSystems() {
       ) : (
         <>
           <div className="as-console-table-wrap">
-            <table className="as-console-table">
+            <table className="as-console-table as-systems-table">
               <thead>
                 <tr>
                   <th>{copy.colMachine}</th>
@@ -133,37 +170,54 @@ export function AdminSystems() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((machine) => (
-                  <tr key={machine.id}>
-                    <td>
-                      <Link href={`/settings/systems/${machine.id}`} className="as-console-item">
-                        <strong>{machine.name}</strong>
-                      </Link>
-                    </td>
-                    <td>{machine.companyLabel}</td>
-                    <td>
-                      <span className="as-count">
-                        <FiUsers size={13} />
-                        {machine.userCount}
-                        {machine.onlineCount > 0 ? (
-                          <em className="as-online">{machine.onlineCount} {copy.online}</em>
-                        ) : null}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="as-count">
-                        <FiBell size={13} />
-                        {machine.enabledRuleCount}
-                        <span className="as-muted">/{machine.ruleCount}</span>
-                      </span>
-                    </td>
-                    <td>
-                      <time dateTime={machine.lastLoginAt ?? undefined}>
-                        {formatWhen(machine.lastLoginAt, locale, copy.never)}
-                      </time>
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((machine) => {
+                  const href = `/settings/systems/${machine.id}`;
+                  const names = companyNames(machine);
+                  return (
+                    <tr
+                      key={machine.id}
+                      className="as-row-link"
+                      tabIndex={0}
+                      role="link"
+                      aria-label={machine.name}
+                      onClick={() => router.push(href)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(href);
+                        }
+                      }}
+                    >
+                      <td>
+                        <strong className="as-machine-name">{machine.name}</strong>
+                      </td>
+                      <td>
+                        <CompanyCell names={names} />
+                      </td>
+                      <td>
+                        <span className="as-count">
+                          <FiUsers size={13} />
+                          {machine.userCount}
+                          {machine.onlineCount > 0 ? (
+                            <em className="as-online">{machine.onlineCount}</em>
+                          ) : null}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="as-count">
+                          <FiBell size={13} />
+                          {machine.enabledRuleCount}
+                          <span className="as-muted">/{machine.ruleCount}</span>
+                        </span>
+                      </td>
+                      <td>
+                        <time dateTime={machine.lastLoginAt ?? undefined}>
+                          {formatWhen(machine.lastLoginAt, locale, copy.never)}
+                        </time>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -172,7 +226,7 @@ export function AdminSystems() {
             {rows.map((machine) => (
               <Link key={machine.id} href={`/settings/systems/${machine.id}`} className="as-card">
                 <strong>{machine.name}</strong>
-                <span>{machine.companyLabel}</span>
+                <CompanyCell names={companyNames(machine)} />
                 <div className="as-card-meta">
                   <span>{copy.colUsers} {machine.userCount}</span>
                   <span>{copy.online} {machine.onlineCount}</span>
